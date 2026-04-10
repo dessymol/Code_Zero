@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 <<<<<<< HEAD
+<<<<<<< HEAD
 const {
   submitCode,
   getSubmissionFeedback,
@@ -13,6 +14,8 @@ const {
   getCourseSubmissionsForFaculty,
   getFacultySummary,
 =======
+=======
+>>>>>>> a30089a (first commit)
 const { 
   submitCode, 
   getCompletedCourses, 
@@ -22,7 +25,10 @@ const {
   getSubmissionsByCourseAndBatch, 
   getMySubmissions,
   getCourseSubmissionsForFaculty,
+<<<<<<< HEAD
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+>>>>>>> a30089a (first commit)
   // NEW: Add these imports
   executeCode,
   getSupportedLanguages,
@@ -50,11 +56,14 @@ router.post('/submit', studentAuth, submitCode);
 // For production: router.post('/submit', authMiddleware, roleMiddleware('student'), submitCode);
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 // Student polls this after submitting
 router.get('/:id/feedback', studentAuth, getSubmissionFeedback);
 
 =======
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+>>>>>>> a30089a (first commit)
 // Student gets their completed courses
 router.get('/completed-courses', studentAuth, getCompletedCourses);
 
@@ -70,6 +79,7 @@ router.get('/admin/course/:courseId', adminAuth, getCourseSubmissionsForAdmin);
 // Admin gets submissions for a specific batch
 router.get(
 <<<<<<< HEAD
+<<<<<<< HEAD
   '/admin/course/:courseId/batch/:batchId',
   authMiddleware,
   roleMiddleware('admin'),
@@ -78,11 +88,17 @@ router.get(
   authMiddleware, 
   roleMiddleware('admin'), 
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+  '/admin/course/:courseId/batch/:batchId', 
+  authMiddleware, 
+  roleMiddleware('admin'), 
+>>>>>>> a30089a (first commit)
   getSubmissionsByCourseAndBatch
 );
 
 // Faculty gets submissions for a course they teach
 router.get(
+<<<<<<< HEAD
 <<<<<<< HEAD
   '/faculty/course/:courseId',
   authMiddleware,
@@ -90,10 +106,15 @@ router.get(
   '/faculty/course/:courseId', 
   authMiddleware, 
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+  '/faculty/course/:courseId', 
+  authMiddleware, 
+>>>>>>> a30089a (first commit)
   roleMiddleware('faculty'),
   getCourseSubmissionsForFaculty
 );
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 // Faculty gets summary of all submissions across their courses
 router.get(
@@ -105,6 +126,8 @@ router.get(
 
 =======
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+>>>>>>> a30089a (first commit)
 // Student can see their own submissions
 router.get('/mine', studentAuth, getMySubmissions);
 

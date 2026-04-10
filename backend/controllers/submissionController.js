@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 exports.getSubmissionFeedback = async (req, res) => {
   try {
     const { id } = req.params;
@@ -22,6 +23,11 @@ const axios = require('axios');
 const db = require('../models'); // load models/index.js once
 const judge0Service = require('../services/judge0Service');
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+const axios = require('axios');
+const db = require('../models'); // load models/index.js once
+const judge0Service = require('../services/judge0Service');
+>>>>>>> a30089a (first commit)
 
 // destructure models + sequelize instance from db
 const {
@@ -39,6 +45,7 @@ const { v4: uuidv4 } = require('uuid');
 const { Op } = require('sequelize');
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 // Language ID to Name mapping for feedback
 const LANGUAGE_ID_MAP = {
   71: 'Python 3.8.1',
@@ -55,6 +62,8 @@ const LANGUAGE_ID_MAP = {
 
 =======
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+>>>>>>> a30089a (first commit)
 // normalize helper
 function normalizeOutput(s = '') {
   return String(s || '')
@@ -69,6 +78,7 @@ exports.executeCode = async (req, res) => {
   try {
     const { code, language, stdin, expectedOutput, questionId } = req.body;
 <<<<<<< HEAD
+<<<<<<< HEAD
     const normalizedLanguageId = Number(language);
 
     if (!code || !normalizedLanguageId) {
@@ -76,12 +86,17 @@ exports.executeCode = async (req, res) => {
         success: false,
         message: 'Code and language are required'
 =======
+=======
+>>>>>>> a30089a (first commit)
     
     if (!code || !language) {
       return res.status(400).json({ 
         success: false, 
         message: 'Code and language are required' 
+<<<<<<< HEAD
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+>>>>>>> a30089a (first commit)
       });
     }
 
@@ -90,10 +105,14 @@ exports.executeCode = async (req, res) => {
     let sampleInput = '';
     let sampleOutput = '';
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 =======
     
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+    
+>>>>>>> a30089a (first commit)
     if (questionId) {
       question = await Question.findByPk(questionId);
       if (question) {
@@ -105,18 +124,24 @@ exports.executeCode = async (req, res) => {
     // Use provided stdin or question's sample input
     const inputToUse = stdin || sampleInput;
 <<<<<<< HEAD
+<<<<<<< HEAD
 
     // Submit to Judge0
     const judgeResult = await judge0Service.submitCode(
       code,
       normalizedLanguageId,
 =======
+=======
+>>>>>>> a30089a (first commit)
     
     // Submit to Judge0
     const judgeResult = await judge0Service.submitCode(
       code,
       language,
+<<<<<<< HEAD
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+>>>>>>> a30089a (first commit)
       inputToUse,
       expectedOutput || sampleOutput,
       true // Wait for execution
@@ -182,10 +207,14 @@ exports.submitCode = async (req, res) => {
 
     let judgeResult = judge_result;
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 =======
     
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+    
+>>>>>>> a30089a (first commit)
     // If judge_result is not provided, submit to Judge0 ourselves
     if (!judgeResult && code && language_id) {
       try {
@@ -199,6 +228,7 @@ exports.submitCode = async (req, res) => {
       } catch (judgeError) {
         await t.rollback();
 <<<<<<< HEAD
+<<<<<<< HEAD
         return res.status(500).json({
           message: 'Failed to execute code with Judge0',
           error: judgeError.message
@@ -207,6 +237,11 @@ exports.submitCode = async (req, res) => {
           message: 'Failed to execute code with Judge0', 
           error: judgeError.message 
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+        return res.status(500).json({ 
+          message: 'Failed to execute code with Judge0', 
+          error: judgeError.message 
+>>>>>>> a30089a (first commit)
         });
       }
     }
@@ -285,6 +320,7 @@ exports.submitCode = async (req, res) => {
 
     await t.commit();
 <<<<<<< HEAD
+<<<<<<< HEAD
 
     // ── Async AI Feedback (fire-and-forget) ──────────────────────
     // This runs AFTER the response is sent. Student never waits for this.
@@ -333,12 +369,17 @@ exports.submitCode = async (req, res) => {
       submission,
       score: awarded_score,
 =======
+=======
+>>>>>>> a30089a (first commit)
     
     // Return Judge0 result along with submission data
     return res.status(action === 'created' ? 201 : 200).json({ 
       submission, 
       score: awarded_score, 
+<<<<<<< HEAD
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+>>>>>>> a30089a (first commit)
       action,
       judgeResult: {
         token: judgeResult.token,
@@ -364,10 +405,14 @@ exports.getSupportedLanguages = async (req, res) => {
   try {
     const languages = await judge0Service.getLanguages();
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 =======
     
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+    
+>>>>>>> a30089a (first commit)
     // Transform to simpler format for frontend
     const formattedLanguages = languages.map(lang => ({
       id: lang.id,
@@ -403,10 +448,14 @@ exports.getSubmissionStatus = async (req, res) => {
   try {
     const { token } = req.params;
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 =======
     
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+    
+>>>>>>> a30089a (first commit)
     if (!token) {
       return res.status(400).json({
         success: false,
@@ -416,10 +465,14 @@ exports.getSubmissionStatus = async (req, res) => {
 
     const result = await judge0Service.getSubmission(token);
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 =======
     
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+    
+>>>>>>> a30089a (first commit)
     return res.status(200).json({
       success: true,
       data: result
@@ -756,6 +809,7 @@ exports.getCourseSubmissionsForFaculty = async (req, res) => {
       return res.status(403).json({ success: false, message: 'You are not assigned to this course' });
     }
 <<<<<<< HEAD
+<<<<<<< HEAD
     /*
     await t.commit();
 
@@ -807,6 +861,9 @@ exports.getCourseSubmissionsForFaculty = async (req, res) => {
 =======
 
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+
+>>>>>>> a30089a (first commit)
     // Build includes
     const include = [
       {
@@ -879,12 +936,17 @@ exports.getMySubmissions = async (req, res) => {
         {
           model: Student,
 <<<<<<< HEAD
+<<<<<<< HEAD
           attributes: ['id', 'name', 'email'],
           include: [{ model: Batch, attributes: ['id', 'name', 'code'] }]
 =======
           attributes: ['id','name','email'],
           include: [{ model: Batch, attributes: ['id','name','code'] }]
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+          attributes: ['id','name','email'],
+          include: [{ model: Batch, attributes: ['id','name','code'] }]
+>>>>>>> a30089a (first commit)
         }
       ],
       order: [['createdAt', 'DESC']],
@@ -908,6 +970,7 @@ exports.getMySubmissions = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Failed to fetch submissions', error: err.message });
   }
 };
+<<<<<<< HEAD
 <<<<<<< HEAD
 
 /**
@@ -1014,3 +1077,5 @@ exports.getFacultySummary = async (req, res) => {
 };
 =======
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+>>>>>>> a30089a (first commit)

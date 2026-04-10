@@ -9,10 +9,6 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-<<<<<<< HEAD
-    "@google/generative-ai": "^0.24.1",
-=======
->>>>>>> d809dc4 (solved some frontend vulnerability)
     "axios": "^1.9.0",
     "bcryptjs": "^3.0.2",
     "body-parser": "^2.2.0",
@@ -26,11 +22,7 @@
     "mysql2": "^3.14.1",
     "node": "^25.9.0",
     "nodemailer": "^7.0.6",
-<<<<<<< HEAD
-    "nodemon": "^3.1.14",
-=======
     "nodemon": "^3.1.10",
->>>>>>> d809dc4 (solved some frontend vulnerability)
     "sequelize": "^6.37.7",
     "socket.io": "^4.8.1",
     "swagger-jsdoc": "^6.2.8",

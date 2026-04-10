@@ -7,6 +7,7 @@ const { sequelize } = require('../config/connection');
 
 const db = {};
 <<<<<<< HEAD
+<<<<<<< HEAD
 db.SubmissionFeedback = require('./submissionfeedback')(sequelize, DataTypes);
 
 /* ---------------------- Load model factory files ---------------------- */
@@ -25,6 +26,8 @@ db.TestResult = require('./testresults')(sequelize, DataTypes);
 // NEW for batches
 db.Batch = require('./batches')(sequelize, DataTypes);
 =======
+=======
+>>>>>>> a30089a (first commit)
 
 /* ---------------------- Load model factory files ---------------------- */
 db.User         = require('./users')(sequelize, DataTypes);
@@ -38,7 +41,10 @@ db.SystemConfig = require('./systemconfig')(sequelize, DataTypes);
 
 // NEW for batches
 db.Batch        = require('./batches')(sequelize, DataTypes);
+<<<<<<< HEAD
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+>>>>>>> a30089a (first commit)
 db.BatchStudent = require('./batchstudents')(sequelize, DataTypes);
 
 // NEW: question_batches join (per-question per-batch toggle)
@@ -112,6 +118,7 @@ db.Submission.belongsTo(db.Student, { foreignKey: 'student_id' });
 db.Question.hasMany(db.Submission, { foreignKey: 'question_id' });
 db.Submission.belongsTo(db.Question, { foreignKey: 'question_id' });
 <<<<<<< HEAD
+<<<<<<< HEAD
 db.Submission.hasOne(db.SubmissionFeedback, { foreignKey: 'submission_id', as: 'Feedback' });
 db.SubmissionFeedback.belongsTo(db.Submission, { foreignKey: 'submission_id' });
 
@@ -130,6 +137,8 @@ if (db.Testcase && db.TestResult) {
 }
 =======
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+>>>>>>> a30089a (first commit)
 
 /** Results (if you use a rollup per course/student) */
 if (db.Result) {
@@ -160,11 +169,17 @@ if (db.QuestionBatch && db.Batch && db.Question) {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 
 
 
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+
+
+
+>>>>>>> a30089a (first commit)
 //Message system
 if (db.Course && db.CourseMessage) {
   db.Course.hasMany(db.CourseMessage, { foreignKey: 'course_id' });

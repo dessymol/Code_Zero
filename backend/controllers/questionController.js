@@ -8,11 +8,16 @@ const {
   User,
   sequelize,
 <<<<<<< HEAD
+<<<<<<< HEAD
   Student
 =======
   Student,
   Testcase
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+  Student,
+  Testcase
+>>>>>>> a30089a (first commit)
 } = require('../models');
 
 /**
@@ -50,9 +55,13 @@ exports.createQuestion = async (req, res) => {
       language_id,
       score,
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
       duration = 10,
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+      duration = 10,
+>>>>>>> a30089a (first commit)
     } = req.body || {};
 
     // basic validation
@@ -79,9 +88,13 @@ exports.createQuestion = async (req, res) => {
       language_id: Number(language_id),
       score: Number(score),
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
       duration: Number(duration),
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+      duration: Number(duration),
+>>>>>>> a30089a (first commit)
     };
 
     const newQuestion = await Question.create(payload);
@@ -119,10 +132,14 @@ exports.updateQuestion = async (req, res) => {
     }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
     const allowed = ['title', 'description', 'sample_input', 'sample_output', 'language_id', 'score', 'faculty_id'];
 =======
     const allowed = ['title', 'description', 'sample_input', 'sample_output', 'duration', 'language_id', 'score', 'faculty_id'];
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+    const allowed = ['title', 'description', 'sample_input', 'sample_output', 'duration', 'language_id', 'score', 'faculty_id'];
+>>>>>>> a30089a (first commit)
     const updates = {};
     for (const k of allowed) {
       if (req.body[k] !== undefined) updates[k] = req.body[k];
@@ -578,10 +595,14 @@ exports.getAvailableQuestionsForStudent = async (req, res, next) => {
         required: true,
         where: { course_id: courseId },
 <<<<<<< HEAD
+<<<<<<< HEAD
         attributes: ['id', 'title', 'description', 'sample_input', 'sample_output', 'language_id', 'score']
 =======
         attributes: ['id', 'title', 'description', 'sample_input', 'sample_output', 'duration']
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+        attributes: ['id', 'title', 'description', 'sample_input', 'sample_output', 'duration']
+>>>>>>> a30089a (first commit)
       }],
       // if you have pagination you can add limit/offset
     });

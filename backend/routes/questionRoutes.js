@@ -3,9 +3,12 @@ const express = require('express');
 const router = express.Router();
 const questionController = require('../controllers/questionController');
 <<<<<<< HEAD
+<<<<<<< HEAD
 const testcaseController = require('../controllers/testcaseController');
 =======
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+>>>>>>> a30089a (first commit)
 
 // adjust path if your auth middleware path differs
 const { authMiddleware, roleMiddleware, studentAuth , adminAuth } = require('../Middleware/authmiddleware');
@@ -32,6 +35,7 @@ router.post('/:id/toggle-batch', authMiddleware, roleMiddleware('faculty'), ques
 router.post('/:questionId/batch/:batchId/toggle', authMiddleware, roleMiddleware('faculty'), questionController.toggleQuestionForBatch);
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 // Test case management (faculty only)
 router.post('/:id/testcases/generate', authMiddleware, roleMiddleware('faculty'), testcaseController.generate);
 router.post('/:id/testcases/approve', authMiddleware, roleMiddleware('faculty'), testcaseController.approve);
@@ -40,6 +44,8 @@ router.delete('/:id/testcases/:tcId', authMiddleware, roleMiddleware('faculty'),
 
 =======
 >>>>>>> d809dc4 (solved some frontend vulnerability)
+=======
+>>>>>>> a30089a (first commit)
 // Student-facing: get active questions for a batch (alternative endpoint)
 router.get('/for-batch/:batchId', studentAuth, questionController.getActiveQuestionsForBatch);
 
