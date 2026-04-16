@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { 
-  submitCode, 
-  getCompletedCourses, 
+const {
+  submitCode,
+  getSubmissionFeedback,
+  getCompletedCourses,
   getQuestionsForStudentCourse,
-  getAllSubmissionsByCourse, 
-  getCourseSubmissionsForAdmin, 
-  getSubmissionsByCourseAndBatch, 
+  getAllSubmissionsByCourse,
+  getCourseSubmissionsForAdmin,
+  getSubmissionsByCourseAndBatch,
   getMySubmissions,
   getCourseSubmissionsForFaculty,
   // NEW: Add these imports
@@ -35,6 +36,9 @@ router.post('/execute', studentAuth, executeCode);
 router.post('/submit', studentAuth, submitCode);
 // For production: router.post('/submit', authMiddleware, roleMiddleware('student'), submitCode);
 
+// Student polls this after submitting
+router.get('/:id/feedback', studentAuth, getSubmissionFeedback);
+
 // Student gets their completed courses
 router.get('/completed-courses', studentAuth, getCompletedCourses);
 
@@ -49,16 +53,16 @@ router.get('/admin/course/:courseId', adminAuth, getCourseSubmissionsForAdmin);
 
 // Admin gets submissions for a specific batch
 router.get(
-  '/admin/course/:courseId/batch/:batchId', 
-  authMiddleware, 
-  roleMiddleware('admin'), 
+  '/admin/course/:courseId/batch/:batchId',
+  authMiddleware,
+  roleMiddleware('admin'),
   getSubmissionsByCourseAndBatch
 );
 
 // Faculty gets submissions for a course they teach
 router.get(
-  '/faculty/course/:courseId', 
-  authMiddleware, 
+  '/faculty/course/:courseId',
+  authMiddleware,
   roleMiddleware('faculty'),
   getCourseSubmissionsForFaculty
 );

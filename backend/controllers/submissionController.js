@@ -1,6 +1,21 @@
+exports.getSubmissionFeedback = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const feedback = await db.SubmissionFeedback.findOne({
+      where: { submission_id: id }
+    });
+    if (!feedback) {
+      return res.status(200).json({ status: 'pending' });
+    }
+    return res.json(feedback);
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
 const axios = require('axios');
 const db = require('../models'); // load models/index.js once
 const judge0Service = require('../services/judge0Service');
+const { generateFeedback } = require('../services/llmServices');
 
 // destructure models + sequelize instance from db
 const {
@@ -17,6 +32,20 @@ const {
 const { v4: uuidv4 } = require('uuid');
 const { Op } = require('sequelize');
 
+// Language ID to Name mapping for feedback
+const LANGUAGE_ID_MAP = {
+  71: 'Python 3.8.1',
+  70: 'Python 2.7',
+  63: 'JavaScript (Node.js 12.14.0)',
+  62: 'Java (OpenJDK 13.0.1)',
+  50: 'C (GCC 9.2.0)',
+  54: 'C++ (GCC 9.2.0)',
+  51: 'C# (Mono 6.12.0)',
+  60: 'Go (1.13.5)',
+  78: 'Kotlin (1.3.71)',
+  68: 'PHP (7.4.1)',
+};
+
 // normalize helper
 function normalizeOutput(s = '') {
   return String(s || '')
@@ -30,11 +59,12 @@ function normalizeOutput(s = '') {
 exports.executeCode = async (req, res) => {
   try {
     const { code, language, stdin, expectedOutput, questionId } = req.body;
-    
-    if (!code || !language) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Code and language are required' 
+    const normalizedLanguageId = Number(language);
+
+    if (!code || !normalizedLanguageId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Code and language are required'
       });
     }
 
@@ -42,7 +72,7 @@ exports.executeCode = async (req, res) => {
     let question = null;
     let sampleInput = '';
     let sampleOutput = '';
-    
+
     if (questionId) {
       question = await Question.findByPk(questionId);
       if (question) {
@@ -53,11 +83,11 @@ exports.executeCode = async (req, res) => {
 
     // Use provided stdin or question's sample input
     const inputToUse = stdin || sampleInput;
-    
+
     // Submit to Judge0
     const judgeResult = await judge0Service.submitCode(
       code,
-      language,
+      normalizedLanguageId,
       inputToUse,
       expectedOutput || sampleOutput,
       true // Wait for execution
@@ -122,7 +152,7 @@ exports.submitCode = async (req, res) => {
     }
 
     let judgeResult = judge_result;
-    
+
     // If judge_result is not provided, submit to Judge0 ourselves
     if (!judgeResult && code && language_id) {
       try {
@@ -135,9 +165,9 @@ exports.submitCode = async (req, res) => {
         );
       } catch (judgeError) {
         await t.rollback();
-        return res.status(500).json({ 
-          message: 'Failed to execute code with Judge0', 
-          error: judgeError.message 
+        return res.status(500).json({
+          message: 'Failed to execute code with Judge0',
+          error: judgeError.message
         });
       }
     }
@@ -215,11 +245,53 @@ exports.submitCode = async (req, res) => {
     }
 
     await t.commit();
-    
+
+    // ── Async AI Feedback (fire-and-forget) ──────────────────────
+    // This runs AFTER the response is sent. Student never waits for this.
+    if (process.env.GEMINI_API_KEY || process.env.LLM_PROVIDER === 'local') {
+      const submissionId = submission.id;
+      const languageName = LANGUAGE_ID_MAP[Number(language_id)] || `Language ${language_id}`;
+      const feedbackPayload = {
+        code,
+        languageName,
+        question: {
+          title: question.title,
+          description: question.description,
+          sample_output: question.sample_output
+        },
+        judgeResult,
+        score: awarded_score,
+        maxScore: question.score
+      };
+
+      setImmediate(async () => {
+        try {
+          const feedback = await generateFeedback(feedbackPayload);
+          await db.SubmissionFeedback.create({
+            submission_id: submissionId,
+            summary: feedback.summary || null,
+            what_went_wrong: feedback.what_went_wrong || null,
+            hint: feedback.hint || null,
+            positive: feedback.positive || null,
+            status: 'done'
+          });
+          console.log(`[Feedback] Generated for submission ${submissionId}`);
+        } catch (err) {
+          console.warn(`[Feedback] Failed for submission ${submissionId}:`, err.message);
+          // Silently create a failed record so the frontend knows to stop polling
+          db.SubmissionFeedback.create({
+            submission_id: submissionId,
+            status: 'failed'
+          }).catch(() => { });
+        }
+      });
+    }
+    // ─────────────────────────────────────────────────────────────
+
     // Return Judge0 result along with submission data
-    return res.status(action === 'created' ? 201 : 200).json({ 
-      submission, 
-      score: awarded_score, 
+    return res.status(action === 'created' ? 201 : 200).json({
+      submission,
+      score: awarded_score,
       action,
       judgeResult: {
         token: judgeResult.token,
@@ -244,7 +316,7 @@ exports.submitCode = async (req, res) => {
 exports.getSupportedLanguages = async (req, res) => {
   try {
     const languages = await judge0Service.getLanguages();
-    
+
     // Transform to simpler format for frontend
     const formattedLanguages = languages.map(lang => ({
       id: lang.id,
@@ -279,7 +351,7 @@ exports.getSupportedLanguages = async (req, res) => {
 exports.getSubmissionStatus = async (req, res) => {
   try {
     const { token } = req.params;
-    
+
     if (!token) {
       return res.status(400).json({
         success: false,
@@ -288,7 +360,7 @@ exports.getSubmissionStatus = async (req, res) => {
     }
 
     const result = await judge0Service.getSubmission(token);
-    
+
     return res.status(200).json({
       success: true,
       data: result
@@ -624,7 +696,54 @@ exports.getCourseSubmissionsForFaculty = async (req, res) => {
     if (!assigned) {
       return res.status(403).json({ success: false, message: 'You are not assigned to this course' });
     }
+    /*
+    await t.commit();
 
+    // ── Async AI Feedback (fire-and-forget) ──────────────────────
+    // This runs AFTER the response is sent. Student never waits for this.
+    if (process.env.GEMINI_API_KEY || process.env.LLM_PROVIDER === 'local') {
+      const submissionId = submission.id;
+      const feedbackPayload = {
+        code,
+        languageName: String(language_id), // use Judge0 language map if available
+        question: {
+          title: question.title,
+          description: question.description,
+          sample_output: question.sample_output
+        },
+        judgeResult,
+        score: awarded_score,
+        maxScore: question.score
+      };
+
+      setImmediate(async () => {
+        try {
+          const feedback = await generateFeedback(feedbackPayload);
+          await db.SubmissionFeedback.create({
+            submission_id: submissionId,
+            summary: feedback.summary || null,
+            what_went_wrong: feedback.what_went_wrong || null,
+            hint: feedback.hint || null,
+            positive: feedback.positive || null,
+            status: 'done'
+          });
+          console.log(`[Feedback] Generated for submission ${submissionId}`);
+        } catch (err) {
+          console.warn(`[Feedback] Failed for submission ${submissionId}:`, err.message);
+          // Silently create a failed record so the frontend knows to stop polling
+          db.SubmissionFeedback.create({
+            submission_id: submissionId,
+            status: 'failed'
+          }).catch(() => { });
+        }
+      });
+    }
+    // ─────────────────────────────────────────────────────────────
+
+    // existing return stays exactly as-is ↓
+    return res.status(action === 'created' ? 201 : 200).json({ ... });
+
+    */
     // Build includes
     const include = [
       {
@@ -696,8 +815,8 @@ exports.getMySubmissions = async (req, res) => {
         },
         {
           model: Student,
-          attributes: ['id','name','email'],
-          include: [{ model: Batch, attributes: ['id','name','code'] }]
+          attributes: ['id', 'name', 'email'],
+          include: [{ model: Batch, attributes: ['id', 'name', 'code'] }]
         }
       ],
       order: [['createdAt', 'DESC']],

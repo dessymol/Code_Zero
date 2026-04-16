@@ -6,19 +6,23 @@ const { Sequelize, DataTypes } = require('sequelize');
 const { sequelize } = require('../config/connection');
 
 const db = {};
+db.SubmissionFeedback = require('./submissionfeedback')(sequelize, DataTypes);
 
 /* ---------------------- Load model factory files ---------------------- */
-db.User         = require('./users')(sequelize, DataTypes);
-db.Student      = require('./student')(sequelize, DataTypes);
-db.Course       = require('./courses')(sequelize, DataTypes);
-db.Question     = require('./questions')(sequelize, DataTypes);
+db.User = require('./users')(sequelize, DataTypes);
+db.Student = require('./student')(sequelize, DataTypes);
+db.Course = require('./courses')(sequelize, DataTypes);
+db.Question = require('./questions')(sequelize, DataTypes);
 db.CourseMessage = require('./courseMessages')(sequelize, DataTypes);
-db.Submission   = require('./submissions')(sequelize, DataTypes);
-db.Result       = require('./results')(sequelize, DataTypes);
+db.Submission = require('./submissions')(sequelize, DataTypes);
+db.Result = require('./results')(sequelize, DataTypes);
 db.SystemConfig = require('./systemconfig')(sequelize, DataTypes);
+db.Testcase = require('./testcases')(sequelize, DataTypes);
+db.TestCase = db.Testcase;
+db.TestResult = require('./testresults')(sequelize, DataTypes);
 
 // NEW for batches
-db.Batch        = require('./batches')(sequelize, DataTypes);
+db.Batch = require('./batches')(sequelize, DataTypes);
 db.BatchStudent = require('./batchstudents')(sequelize, DataTypes);
 
 // NEW: question_batches join (per-question per-batch toggle)
@@ -91,6 +95,22 @@ db.Submission.belongsTo(db.Student, { foreignKey: 'student_id' });
 
 db.Question.hasMany(db.Submission, { foreignKey: 'question_id' });
 db.Submission.belongsTo(db.Question, { foreignKey: 'question_id' });
+db.Submission.hasOne(db.SubmissionFeedback, { foreignKey: 'submission_id', as: 'Feedback' });
+db.SubmissionFeedback.belongsTo(db.Submission, { foreignKey: 'submission_id' });
+
+/** Test cases and per-test execution results */
+if (db.Question && db.Testcase) {
+  db.Question.hasMany(db.Testcase, { foreignKey: 'question_id' });
+  db.Testcase.belongsTo(db.Question, { foreignKey: 'question_id' });
+}
+
+if (db.Submission && db.TestResult) {
+  db.Submission.hasMany(db.TestResult, { foreignKey: 'submission_id', as: 'testResults' });
+}
+
+if (db.Testcase && db.TestResult) {
+  db.Testcase.hasMany(db.TestResult, { foreignKey: 'test_case_id', as: 'results' });
+}
 
 /** Results (if you use a rollup per course/student) */
 if (db.Result) {
@@ -119,9 +139,6 @@ if (db.QuestionBatch && db.Batch && db.Question) {
   db.Question.hasMany(db.QuestionBatch, { foreignKey: 'question_id', as: 'QuestionBatches' });
   db.Batch.hasMany(db.QuestionBatch, { foreignKey: 'batch_id', as: 'QuestionBatches' });
 }
-
-
-
 
 //Message system
 if (db.Course && db.CourseMessage) {

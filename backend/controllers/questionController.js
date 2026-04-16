@@ -7,8 +7,7 @@ const {
   Course,
   User,
   sequelize,
-  Student,
-  Testcase
+  Student
 } = require('../models');
 
 /**
@@ -45,7 +44,6 @@ exports.createQuestion = async (req, res) => {
       course_id,
       language_id,
       score,
-      duration = 10,
     } = req.body || {};
 
     // basic validation
@@ -71,7 +69,6 @@ exports.createQuestion = async (req, res) => {
       faculty_id: facultyId === null ? null : Number(facultyId),
       language_id: Number(language_id),
       score: Number(score),
-      duration: Number(duration),
     };
 
     const newQuestion = await Question.create(payload);
@@ -108,7 +105,7 @@ exports.updateQuestion = async (req, res) => {
       return res.status(403).json({ message: 'Forbidden: not owner' });
     }
 
-    const allowed = ['title', 'description', 'sample_input', 'sample_output', 'duration', 'language_id', 'score', 'faculty_id'];
+    const allowed = ['title', 'description', 'sample_input', 'sample_output', 'language_id', 'score', 'faculty_id'];
     const updates = {};
     for (const k of allowed) {
       if (req.body[k] !== undefined) updates[k] = req.body[k];
@@ -563,7 +560,7 @@ exports.getAvailableQuestionsForStudent = async (req, res, next) => {
         model: Question,
         required: true,
         where: { course_id: courseId },
-        attributes: ['id', 'title', 'description', 'sample_input', 'sample_output', 'duration']
+        attributes: ['id', 'title', 'description', 'sample_input', 'sample_output', 'language_id', 'score']
       }],
       // if you have pagination you can add limit/offset
     });
