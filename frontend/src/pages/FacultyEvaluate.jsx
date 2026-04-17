@@ -84,6 +84,10 @@ export default function FacultyEvaluate() {
   const [scoreRows, setScoreRows] = useState([]);
   const [scoreLoading, setScoreLoading] = useState(false);
 
+  // ADD after existing useState declarations
+  const [editingScore, setEditingScore] = useState(null); // { submissionId, value }
+  const [savingScore, setSavingScore] = useState(false);
+
   useEffect(() => {
     if (courseId) fetchBatchesAndSubmissions();
   }, [courseId]);
@@ -184,6 +188,50 @@ export default function FacultyEvaluate() {
       setScoreRows([]);
     } finally {
       setScoreLoading(false);
+    }
+  };
+
+  const saveOverriddenScore = async () => {
+
+
+    if (!editingScore) return;
+    setSavingScore(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.patch(
+        `${API}/submissions/${editingScore.submissionId}/score`,
+        { score: editingScore.value, note: 'Faculty override' },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      // optimistically update local state
+      setSubmissions(prev =>
+        prev.map(s =>
+          s.id === editingScore.submissionId
+            ? { ...s, score: editingScore.value, manually_overridden: true }
+            : s
+        )
+      );
+      setEditingScore(null);
+    } catch (err) {
+      alert('Failed to save score: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setSavingScore(false);
+    }
+  };
+
+  const approveSubmission = async (submissionId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.patch(
+        `${API}/submissions/${submissionId}/approve`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setSubmissions(prev =>
+        prev.map(s => s.id === submissionId ? { ...s, approved: true } : s)
+      );
+    } catch (err) {
+      alert('Failed to approve: ' + (err.response?.data?.message || err.message));
     }
   };
 
@@ -293,7 +341,48 @@ export default function FacultyEvaluate() {
                               <p className="text-xs text-slate-500">{s.student_email}</p>
                             </div>
                           </div>
-                          <ScoreBadge score={s.score} />
+                          {/* <ScoreBadge score={s.score} /> */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {editingScore?.submissionId === s.id ? (
+                              <>
+                                <input
+                                  type="number"
+                                  value={editingScore.value}
+                                  min={0}
+                                  max={s.max_score ?? 100}
+                                  onChange={e => setEditingScore(prev => ({ ...prev, value: Number(e.target.value) }))}
+                                  style={{ width: 64, padding: '2px 6px', borderRadius: 4, border: '1px solid #6366f1' }}
+                                />
+                                <button
+                                  onClick={saveOverriddenScore}
+                                  disabled={savingScore}
+                                  style={{ padding: '2px 8px', background: '#6366f1', color: '#fff', borderRadius: 4, border: 'none', cursor: 'pointer', fontSize: 12 }}
+                                >
+                                  {savingScore ? '…' : 'Save'}
+                                </button>
+                                <button
+                                  onClick={() => setEditingScore(null)}
+                                  style={{ padding: '2px 6px', background: '#e5e7eb', borderRadius: 4, border: 'none', cursor: 'pointer', fontSize: 12 }}
+                                >
+                                  ✕
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <ScoreBadge score={s.score} />
+                                {s.manually_overridden && (
+                                  <span title="Manually overridden" style={{ fontSize: 11, color: '#f59e0b' }}>✏️</span>
+                                )}
+                                <button
+                                  onClick={() => setEditingScore({ submissionId: s.id, value: s.score })}
+                                  style={{ padding: '2px 6px', background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 4, cursor: 'pointer', fontSize: 11 }}
+                                  title="Override score"
+                                >
+                                  Edit
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
 
                         <div className="space-y-2 mb-3">
@@ -318,6 +407,21 @@ export default function FacultyEvaluate() {
                               {s.output}
                             </pre>
                           </div>
+                        )}
+
+                        {!s.approved ? (
+                          <button
+                            onClick={() => approveSubmission(s.id)}
+                            style={{
+                              padding: '2px 8px', background: '#d1fae5', color: '#065f46',
+                              border: '1px solid #6ee7b7', borderRadius: 4, cursor: 'pointer', fontSize: 11
+                            }}
+                            title="Lock this submission — student cannot re-attempt"
+                          >
+                            Approve
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: 11, color: '#059669', fontWeight: 700 }}>✔ Approved</span>
                         )}
                       </div>
                     ))}

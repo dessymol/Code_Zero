@@ -36,7 +36,7 @@ const testConnection = async () => {
   try {
     await sequelize.authenticate();
     logger.info('Database connection established successfully.');
-    await sequelize.sync({ alter: false, force: false });
+    await sequelize.sync({ alter: true, force: false });
 
 
 

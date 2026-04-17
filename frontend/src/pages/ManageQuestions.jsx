@@ -104,6 +104,10 @@ export default function ManageQuestions() {
   const [generatedTestcases, setGeneratedTestcases] = useState([]);
   const [generatingTestcases, setGeneratingTestcases] = useState(false);
   const [approvingTestcases, setApprovingTestcases] = useState(false);
+  const [refSolution, setRefSolution] = useState('');
+  const [savedTestcases, setSavedTestcases] = useState([]);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyResults, setVerifyResults] = useState(null);
 
   const chatIndex = batches.length + 1;
 
@@ -146,6 +150,40 @@ export default function ManageQuestions() {
       alert('Failed to load data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const verifyReferenceSolution = async () => {
+    if (!testcaseQuestion) return;
+    setVerifying(true);
+    setVerifyResults(null);
+    try {
+      // First save reference solution
+      await axios.put(
+        `${API}/questions/update/${testcaseQuestion.id}`,
+        { reference_solution: refSolution },
+        { headers }
+      );
+      // Then verify
+      const res = await axios.post(
+        `${API}/questions/${testcaseQuestion.id}/verify`,
+        {},
+        { headers }
+      );
+      setVerifyResults(res.data);
+    } catch (err) {
+      alert('Verification failed: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setVerifying(false);
+    }
+  };
+  const deleteSavedTestcase = async (tcId) => {
+    if (!testcaseQuestion) return;
+    try {
+      await axios.delete(`${API}/questions/${testcaseQuestion.id}/testcases/${tcId}`, { headers });
+      setSavedTestcases(prev => prev.filter(tc => tc.id !== tcId));
+    } catch (err) {
+      alert('Delete failed: ' + (err.response?.data?.message || err.message));
     }
   };
 
@@ -203,6 +241,14 @@ export default function ManageQuestions() {
     setTestcaseQuestion(question);
     setGeneratedTestcases([]);
     setTestcaseDialogOpen(true);
+    // Load existing saved test cases
+    try {
+      const savedRes = await axios.get(`${API}/questions/${question.id}/testcases`, { headers });
+      setSavedTestcases(savedRes.data?.testcases || []);
+    } catch { setSavedTestcases([]); }
+
+    // Prefill reference solution if saved
+    setRefSolution(question.reference_solution || '');
     setGeneratingTestcases(true);
     try {
       const res = await axios.post(`${API}/questions/${question.id}/testcases/generate`, {}, { headers });
@@ -565,6 +611,77 @@ export default function ManageQuestions() {
         title={testcaseQuestion ? `Generated Test Cases for ${testcaseQuestion.title}` : 'Generated Test Cases'}
         maxWidth="max-w-5xl"
       >
+        {/* Reference solution */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>Reference Solution</div>
+          <textarea
+            value={refSolution}
+            onChange={e => setRefSolution(e.target.value)}
+            rows={8}
+            style={{
+              width: '100%', fontFamily: 'monospace', fontSize: 13,
+              padding: 8, borderRadius: 6, border: '1px solid #d1d5db', boxSizing: 'border-box'
+            }}
+            placeholder="Paste the correct solution code here…"
+          />
+          <button
+            onClick={verifyReferenceSolution}
+            disabled={verifying || !refSolution || savedTestcases.length === 0}
+            style={{
+              marginTop: 8, padding: '6px 14px', background: '#0b66c3', color: '#fff',
+              borderRadius: 6, border: 'none', cursor: 'pointer'
+            }}
+          >
+            {verifying ? 'Verifying…' : 'Verify Against Saved Test Cases'}
+          </button>
+          {verifyResults && (
+            <div style={{
+              marginTop: 10, padding: 10, background: verifyResults.allPassed ? '#d1fae5' : '#fee2e2',
+              borderRadius: 6, fontSize: 13
+            }}>
+              <strong>{verifyResults.allPassed ? '✅ All test cases passed' : '❌ Some test cases failed'}</strong>
+              <ul style={{ marginTop: 6, paddingLeft: 16 }}>
+                {verifyResults.results?.map(r => (
+                  <li key={r.testcase_id} style={{ color: r.passed ? '#065f46' : '#991b1b' }}>
+                    TC #{r.testcase_id}: {r.passed ? 'PASS' : `FAIL — expected "${r.expected}", got "${r.actual}"`}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        {/* Saved test cases */}
+        {savedTestcases.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Saved Test Cases ({savedTestcases.length})</div>
+            {savedTestcases.map(tc => (
+              <div key={tc.id} style={{
+                display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8,
+                background: '#f9fafb', padding: 8, borderRadius: 6
+              }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12, color: '#6b7280' }}>Input</div>
+                  <pre style={{ margin: 0, fontSize: 12 }}>{tc.input || '(empty)'}</pre>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12, color: '#6b7280' }}>Expected Output</div>
+                  <pre style={{ margin: 0, fontSize: 12 }}>{tc.output}</pre>
+                </div>
+                <button
+                  onClick={() => deleteSavedTestcase(tc.id)}
+                  style={{
+                    padding: '2px 8px', background: '#fef2f2', color: '#dc2626',
+                    border: '1px solid #fca5a5', borderRadius: 4, cursor: 'pointer', fontSize: 12
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="space-y-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>

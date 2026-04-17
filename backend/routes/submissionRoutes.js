@@ -13,10 +13,11 @@ const {
   // NEW: Add these imports
   executeCode,
   getSupportedLanguages,
-  getSubmissionStatus
+  getSubmissionStatus,
+  approveSubmission,
+  overrideScore
 } = require('../controllers/submissionController');
 const { studentAuth, facultyAuth, adminAuth, authMiddleware, roleMiddleware } = require('../Middleware/authmiddleware');
-
 // ========================
 // PUBLIC ENDPOINTS (No auth required for testing)
 // ========================
@@ -66,8 +67,8 @@ router.get(
   roleMiddleware('faculty'),
   getCourseSubmissionsForFaculty
 );
-
+router.patch('/:id/approve', authMiddleware, roleMiddleware('faculty'), approveSubmission);
 // Student can see their own submissions
 router.get('/mine', studentAuth, getMySubmissions);
-
+router.patch('/:id/score', authMiddleware, roleMiddleware('faculty'), overrideScore);
 module.exports = router;

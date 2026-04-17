@@ -85,12 +85,12 @@ exports.executeCode = async (req, res) => {
     const inputToUse = stdin || sampleInput;
 
     // Submit to Judge0
-    const judgeResult = await judge0Service.submitCode(
+    judgeResult = await judge0Service.submitCode(
       code,
-      normalizedLanguageId,
-      inputToUse,
-      expectedOutput || sampleOutput,
-      true // Wait for execution
+      language_id,
+      stdin || question.sample_input || '',   // prefer req.body.stdin
+      question.sample_output || '',
+      true
     );
 
     // Return the Judge0 result
@@ -141,7 +141,10 @@ exports.submitCode = async (req, res) => {
       await t.rollback();
       return res.status(404).json({ message: 'Question not found' });
     }
-
+    const testcases = await db.Testcase.findAll({
+      where: { question_id },
+      transaction: t
+    });
     // If question has assigned language, enforce it
     const permittedLang = question.language_id !== undefined && question.language_id !== null
       ? Number(question.language_id)
@@ -186,12 +189,60 @@ exports.submitCode = async (req, res) => {
 
     let awarded_score = 0;
     const qScore = Number(question.score) || 0;
-    if (statusId === 3 && expected !== '') {
-      awarded_score = (stdout === expected) ? qScore : 0;
-    } else if (statusId === 3 && expected === '') {
-      awarded_score = qScore;
+
+    if (testcases.length > 0) {
+      // ── Multi-testcase scoring path ───────────────────────────────
+      let passedCount = 0;
+      const testResultRows = [];
+
+      for (const tc of testcases) {
+        let tcResult;
+        try {
+          tcResult = await judge0Service.submitCode(
+            code,
+            language_id,
+            tc.input || '',
+            tc.output || '',
+            true   // wait
+          );
+        } catch (e) {
+          tcResult = { status: { id: 0, description: 'Judge0 error' }, stdout: '' };
+        }
+
+        const tcStdout = normalizeOutput((tcResult.stdout || '').toString());
+        const tcExpected = normalizeOutput((tc.output || '').toString());
+        const tcStatusId = tcResult.status ? tcResult.status.id : 0;
+        const passed = tcStatusId === 3 && tcStdout === tcExpected;
+        if (passed) passedCount++;
+
+        testResultRows.push({
+          submission_id: null, // filled in after submission is created
+          testcase_id: tc.id,
+          passed,
+          actual_output: tcStdout,
+          execution_time: tcResult.time ? String(tcResult.time) : null
+        });
+      }
+
+      awarded_score = Math.round((passedCount / testcases.length) * qScore);
+
+      // Store per-testcase results (after submission row is created — see Step C)
+      // We carry testResultRows forward via a closure variable.
+      // (See Step C below for the insert.)
+
     } else {
-      awarded_score = 0;
+      // ── Fallback: single sample_output comparison ─────────────────
+      const rawStdout = (judgeResult.stdout || '').toString();
+      const stdout = normalizeOutput(rawStdout);
+      const expectedRaw = (question.sample_output || '').toString();
+      const expected = normalizeOutput(expectedRaw);
+      const statusId = judgeResult.status ? judgeResult.status.id : (judgeResult.status_id || 0);
+
+      if (statusId === 3 && expected !== '') {
+        awarded_score = (stdout === expected) ? qScore : 0;
+      } else if (statusId === 3 && expected === '') {
+        awarded_score = qScore;
+      }
     }
 
     // Find existing submission (your existing code)
@@ -245,7 +296,17 @@ exports.submitCode = async (req, res) => {
     }
 
     await t.commit();
-
+    if (testcases.length > 0 && testResultRows.length > 0) {
+      const submissionId = submission.id;
+      setImmediate(async () => {
+        try {
+          const rows = testResultRows.map(r => ({ ...r, submission_id: submissionId }));
+          await db.TestResult.bulkCreate(rows);
+        } catch (err) {
+          console.warn('[TestResults] Failed to save test results:', err.message);
+        }
+      });
+    }
     // ── Async AI Feedback (fire-and-forget) ──────────────────────
     // This runs AFTER the response is sent. Student never waits for this.
     if (process.env.GEMINI_API_KEY || process.env.LLM_PROVIDER === 'local') {
@@ -838,5 +899,47 @@ exports.getMySubmissions = async (req, res) => {
   } catch (err) {
     console.error('getMySubmissions error', err);
     return res.status(500).json({ success: false, message: 'Failed to fetch submissions', error: err.message });
+  }
+};
+exports.overrideScore = async (req, res) => {
+  try {
+    const facultyId = req.user && req.user.id;
+    if (!facultyId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const { id } = req.params;
+    const { score, note } = req.body;
+
+    if (score === undefined || score === null || isNaN(Number(score))) {
+      return res.status(400).json({ message: 'score (number) is required' });
+    }
+
+    const submission = await Submission.findByPk(id);
+    if (!submission) return res.status(404).json({ message: 'Submission not found' });
+
+    submission.score = Number(score);
+    submission.manually_overridden = true;
+    submission.override_note = note || null;
+    await submission.save();
+
+    return res.json({ success: true, submission });
+  } catch (err) {
+    console.error('overrideScore error:', err);
+    return res.status(500).json({ message: err.message });
+  }
+};
+exports.approveSubmission = async (req, res) => {
+  try {
+    const facultyId = req.user && req.user.id;
+    if (!facultyId) return res.status(401).json({ message: 'Unauthorized' });
+
+    const submission = await Submission.findByPk(req.params.id);
+    if (!submission) return res.status(404).json({ message: 'Submission not found' });
+
+    submission.approved = true;
+    await submission.save();
+
+    return res.json({ success: true, submission });
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
   }
 };

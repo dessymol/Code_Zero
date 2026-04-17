@@ -3,9 +3,8 @@ const express = require('express');
 const router = express.Router();
 const questionController = require('../controllers/questionController');
 const testcaseController = require('../controllers/testcaseController');
-
 // adjust path if your auth middleware path differs
-const { authMiddleware, roleMiddleware, studentAuth , adminAuth } = require('../Middleware/authmiddleware');
+const { authMiddleware, roleMiddleware, studentAuth, adminAuth } = require('../Middleware/authmiddleware');
 
 // Create question (faculty)
 router.post('/add', authMiddleware, roleMiddleware('faculty'), questionController.createQuestion);
@@ -23,7 +22,7 @@ router.delete('/delete/:id', authMiddleware, roleMiddleware('faculty'), question
 
 // Question bank (faculty) (optionally include batch states)
 router.get('/bank/:courseId', authMiddleware, questionController.getQuestionBankForCourse);
-
+router.post('/:id/verify', authMiddleware, roleMiddleware('faculty'), testcaseController.verify);
 // Routes for toggling question/batch state (faculty only)
 router.post('/:id/toggle-batch', authMiddleware, roleMiddleware('faculty'), questionController.toggleQuestionForBatch);
 router.post('/:questionId/batch/:batchId/toggle', authMiddleware, roleMiddleware('faculty'), questionController.toggleQuestionForBatch);

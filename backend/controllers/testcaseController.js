@@ -92,3 +92,60 @@ exports.remove = async (req, res) => {
         return res.status(500).json({ success: false, message: err.message });
     }
 };
+/**
+ * POST /api/questions/:id/verify
+ * Runs question.reference_solution against every saved test case.
+ * Returns per-test-case pass/fail without saving anything.
+ */
+exports.verify = async (req, res) => {
+    try {
+        const question = await Question.findByPk(req.params.id);
+        if (!question) return res.status(404).json({ message: 'Question not found' });
+
+        if (!question.reference_solution) {
+            return res.status(400).json({ message: 'No reference solution saved for this question' });
+        }
+
+        const testcases = await db.Testcase.findAll({ where: { question_id: question.id } });
+        if (testcases.length === 0) {
+            return res.status(400).json({ message: 'No test cases found for this question' });
+        }
+
+        const judge0Service = require('../services/judge0Service');
+
+        const normalizeOutput = (s = '') =>
+            String(s || '').replace(/\r\n/g, '\n').split('\n').map(l => l.trim()).join('\n').trim();
+
+        const results = await Promise.all(testcases.map(async (tc) => {
+            let result;
+            try {
+                result = await judge0Service.submitCode(
+                    question.reference_solution,
+                    question.language_id,
+                    tc.input || '',
+                    tc.output || '',
+                    true
+                );
+            } catch (e) {
+                return { testcase_id: tc.id, input: tc.input, passed: false, error: e.message };
+            }
+            const actual = normalizeOutput(result.stdout || '');
+            const expected = normalizeOutput(tc.output || '');
+            const statusId = result.status ? result.status.id : 0;
+            return {
+                testcase_id: tc.id,
+                input: tc.input,
+                expected,
+                actual,
+                passed: statusId === 3 && actual === expected,
+                status: result.status?.description || 'Unknown'
+            };
+        }));
+
+        const allPassed = results.every(r => r.passed);
+        return res.json({ success: true, allPassed, results });
+    } catch (err) {
+        console.error('[testcaseController] verify error:', err.message);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};

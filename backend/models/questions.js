@@ -36,7 +36,12 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 100,
-    }
+    },
+    reference_solution: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      defaultValue: null
+    },
   }, {
     timestamps: true,
     tableName: 'Questions' // keep same table name if your migrations/DB use it

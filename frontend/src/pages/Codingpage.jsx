@@ -707,17 +707,38 @@ const CodingPage = () => {
 
         // Poll once after 5 seconds (Gemini), 15 seconds for local LLM
         const delay = 5000;
-        setTimeout(async () => {
-          try {
-            const fb = await axios.get(
-              `${BACKEND_API_URL}/api/submissions/${submissionId}/feedback`,
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
-            setFeedback(prev => ({ ...prev, [qid]: fb.data }));
-          } catch {
-            setFeedback(prev => ({ ...prev, [qid]: { status: 'failed' } }));
+        // try once at 6 s, retry at 14 s if still pending
+        const pollFeedback = async () => {
+          const token = localStorage.getItem('token');
+          for (const wait of [6000, 8000]) {
+            await new Promise(r => setTimeout(r, wait));
+            try {
+              const fb = await axios.get(
+                `${BACKEND_API_URL}/api/submissions/${submissionId}/feedback`,
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              if (fb.data?.status === 'done' || fb.data?.status === 'failed') {
+                setFeedback(prev => ({ ...prev, [qid]: fb.data }));
+                return;
+              }
+            } catch { /* ignore and retry */ }
           }
-        }, delay);
+          // Give up after 2 attempts
+          setFeedback(prev => ({ ...prev, [qid]: { status: 'failed' } }));
+        };
+        pollFeedback();
+        // setTimeout(async () => {
+        //   try {
+        //     const fb = await axios.get(
+        //       `${BACKEND_API_URL}/api/submissions/${submissionId}/feedback`,
+        //       { headers: { Authorization: `Bearer ${token}` } }
+        //     );
+        //     setFeedback(prev => ({ ...prev, [qid]: fb.data }));
+        //   } catch {
+        //     setFeedback(prev => ({ ...prev, [qid]: { status: 'failed' } }));
+        //   }
+        // }, delay);
+
       }
       // Mark as submitted
       setSubmittedQuestions(prev => [...new Set([...prev, qid])]);
@@ -1126,9 +1147,17 @@ const CodingPage = () => {
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input type="checkbox" checked={useCustomInput} onChange={e => setUseCustomInput(e.target.checked)} />
-                  <span style={{ fontSize: 13 }}>Use Custom Input</span>
+                <label style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: useCustomInput ? '#d1fae5' : 'transparent',
+                  border: useCustomInput ? '1px solid #10b981' : '1px solid transparent',
+                  padding: '4px 8px', borderRadius: 6, cursor: 'pointer'
+                }}>
+                  <input type="checkbox" checked={useCustomInput}
+                    onChange={e => setUseCustomInput(e.target.checked)} />
+                  <span style={{ fontSize: 13, color: useCustomInput ? '#065f46' : '#333', fontWeight: useCustomInput ? 700 : 400 }}>
+                    {useCustomInput ? '✔ Custom Input Active' : 'Use Custom Input'}
+                  </span>
                 </label>
               </div>
             </div>
@@ -1161,7 +1190,7 @@ const CodingPage = () => {
                 : (results[currentQuestion.id] ? results[currentQuestion.id] : 'Output / compiler messages will appear here.')}
             </div>
 
-            {feedback[currentQuestion?.id]?.status === 'loading' && (
+            {/* {feedback[currentQuestion?.id]?.status === 'loading' && (
               <div className="mt-3 p-3 rounded border border-gray-200 text-sm text-gray-500">
                 AI feedback generating...
               </div>
@@ -1180,7 +1209,45 @@ const CodingPage = () => {
                   <p className="mt-2 text-green-700">✓ {feedback[currentQuestion.id].positive}</p>
                 )}
               </div>
-            )}
+            )} */}
+            {feedback[currentQuestion?.id] && (() => {
+              const fb = feedback[currentQuestion.id];
+              if (fb.status === 'loading') return (
+                <div style={{
+                  marginTop: 8, padding: '10px 14px', background: '#f5f3ff',
+                  border: '1px solid #ddd6fe', borderRadius: 8, fontSize: 13, color: '#6b7280'
+                }}>
+                  ⏳ AI feedback generating — this takes a few seconds…
+                </div>
+              );
+              if (fb.status === 'failed') return (
+                <div style={{
+                  marginTop: 8, padding: '10px 14px', background: '#fef2f2',
+                  border: '1px solid #fecaca', borderRadius: 8, fontSize: 13, color: '#991b1b'
+                }}>
+                  ⚠ AI feedback unavailable for this submission.
+                </div>
+              );
+              if (fb.status === 'done') return (
+                <div style={{
+                  marginTop: 8, padding: '14px 16px', background: '#f5f3ff',
+                  border: '1px solid #ddd6fe', borderRadius: 8, fontSize: 13
+                }}>
+                  <div style={{ fontWeight: 700, color: '#6d28d9', marginBottom: 8 }}>🤖 AI Feedback</div>
+                  {fb.summary && <p style={{ margin: '0 0 6px' }}>{fb.summary}</p>}
+                  {fb.what_went_wrong && (
+                    <p style={{ margin: '6px 0', color: '#b91c1c' }}>⚠ <strong>Issue:</strong> {fb.what_went_wrong}</p>
+                  )}
+                  {fb.hint && (
+                    <p style={{ margin: '6px 0', color: '#b45309' }}>💡 <strong>Hint:</strong> {fb.hint}</p>
+                  )}
+                  {fb.positive && (
+                    <p style={{ margin: '6px 0', color: '#065f46' }}>✓ <strong>Well done:</strong> {fb.positive}</p>
+                  )}
+                </div>
+              );
+              return null;
+            })()}
 
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <button
