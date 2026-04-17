@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 exports.getSubmissionFeedback = async (req, res) => {
   try {
     const { id } = req.params;
@@ -16,6 +17,11 @@ const axios = require('axios');
 const db = require('../models'); // load models/index.js once
 const judge0Service = require('../services/judge0Service');
 const { generateFeedback } = require('../services/llmServices');
+=======
+const axios = require('axios');
+const db = require('../models'); // load models/index.js once
+const judge0Service = require('../services/judge0Service');
+>>>>>>> d809dc4 (solved some frontend vulnerability)
 
 // destructure models + sequelize instance from db
 const {
@@ -32,6 +38,7 @@ const {
 const { v4: uuidv4 } = require('uuid');
 const { Op } = require('sequelize');
 
+<<<<<<< HEAD
 // Language ID to Name mapping for feedback
 const LANGUAGE_ID_MAP = {
   71: 'Python 3.8.1',
@@ -46,6 +53,8 @@ const LANGUAGE_ID_MAP = {
   68: 'PHP (7.4.1)',
 };
 
+=======
+>>>>>>> d809dc4 (solved some frontend vulnerability)
 // normalize helper
 function normalizeOutput(s = '') {
   return String(s || '')
@@ -59,12 +68,20 @@ function normalizeOutput(s = '') {
 exports.executeCode = async (req, res) => {
   try {
     const { code, language, stdin, expectedOutput, questionId } = req.body;
+<<<<<<< HEAD
     const normalizedLanguageId = Number(language);
 
     if (!code || !normalizedLanguageId) {
       return res.status(400).json({
         success: false,
         message: 'Code and language are required'
+=======
+    
+    if (!code || !language) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Code and language are required' 
+>>>>>>> d809dc4 (solved some frontend vulnerability)
       });
     }
 
@@ -72,7 +89,11 @@ exports.executeCode = async (req, res) => {
     let question = null;
     let sampleInput = '';
     let sampleOutput = '';
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> d809dc4 (solved some frontend vulnerability)
     if (questionId) {
       question = await Question.findByPk(questionId);
       if (question) {
@@ -83,11 +104,19 @@ exports.executeCode = async (req, res) => {
 
     // Use provided stdin or question's sample input
     const inputToUse = stdin || sampleInput;
+<<<<<<< HEAD
 
     // Submit to Judge0
     const judgeResult = await judge0Service.submitCode(
       code,
       normalizedLanguageId,
+=======
+    
+    // Submit to Judge0
+    const judgeResult = await judge0Service.submitCode(
+      code,
+      language,
+>>>>>>> d809dc4 (solved some frontend vulnerability)
       inputToUse,
       expectedOutput || sampleOutput,
       true // Wait for execution
@@ -152,7 +181,11 @@ exports.submitCode = async (req, res) => {
     }
 
     let judgeResult = judge_result;
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> d809dc4 (solved some frontend vulnerability)
     // If judge_result is not provided, submit to Judge0 ourselves
     if (!judgeResult && code && language_id) {
       try {
@@ -165,9 +198,15 @@ exports.submitCode = async (req, res) => {
         );
       } catch (judgeError) {
         await t.rollback();
+<<<<<<< HEAD
         return res.status(500).json({
           message: 'Failed to execute code with Judge0',
           error: judgeError.message
+=======
+        return res.status(500).json({ 
+          message: 'Failed to execute code with Judge0', 
+          error: judgeError.message 
+>>>>>>> d809dc4 (solved some frontend vulnerability)
         });
       }
     }
@@ -245,6 +284,7 @@ exports.submitCode = async (req, res) => {
     }
 
     await t.commit();
+<<<<<<< HEAD
 
     // ── Async AI Feedback (fire-and-forget) ──────────────────────
     // This runs AFTER the response is sent. Student never waits for this.
@@ -292,6 +332,13 @@ exports.submitCode = async (req, res) => {
     return res.status(action === 'created' ? 201 : 200).json({
       submission,
       score: awarded_score,
+=======
+    
+    // Return Judge0 result along with submission data
+    return res.status(action === 'created' ? 201 : 200).json({ 
+      submission, 
+      score: awarded_score, 
+>>>>>>> d809dc4 (solved some frontend vulnerability)
       action,
       judgeResult: {
         token: judgeResult.token,
@@ -316,7 +363,11 @@ exports.submitCode = async (req, res) => {
 exports.getSupportedLanguages = async (req, res) => {
   try {
     const languages = await judge0Service.getLanguages();
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> d809dc4 (solved some frontend vulnerability)
     // Transform to simpler format for frontend
     const formattedLanguages = languages.map(lang => ({
       id: lang.id,
@@ -351,7 +402,11 @@ exports.getSupportedLanguages = async (req, res) => {
 exports.getSubmissionStatus = async (req, res) => {
   try {
     const { token } = req.params;
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> d809dc4 (solved some frontend vulnerability)
     if (!token) {
       return res.status(400).json({
         success: false,
@@ -360,7 +415,11 @@ exports.getSubmissionStatus = async (req, res) => {
     }
 
     const result = await judge0Service.getSubmission(token);
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> d809dc4 (solved some frontend vulnerability)
     return res.status(200).json({
       success: true,
       data: result
@@ -696,6 +755,7 @@ exports.getCourseSubmissionsForFaculty = async (req, res) => {
     if (!assigned) {
       return res.status(403).json({ success: false, message: 'You are not assigned to this course' });
     }
+<<<<<<< HEAD
     /*
     await t.commit();
 
@@ -744,6 +804,9 @@ exports.getCourseSubmissionsForFaculty = async (req, res) => {
     return res.status(action === 'created' ? 201 : 200).json({ ... });
 
     */
+=======
+
+>>>>>>> d809dc4 (solved some frontend vulnerability)
     // Build includes
     const include = [
       {
@@ -815,8 +878,13 @@ exports.getMySubmissions = async (req, res) => {
         },
         {
           model: Student,
+<<<<<<< HEAD
           attributes: ['id', 'name', 'email'],
           include: [{ model: Batch, attributes: ['id', 'name', 'code'] }]
+=======
+          attributes: ['id','name','email'],
+          include: [{ model: Batch, attributes: ['id','name','code'] }]
+>>>>>>> d809dc4 (solved some frontend vulnerability)
         }
       ],
       order: [['createdAt', 'DESC']],
@@ -840,6 +908,7 @@ exports.getMySubmissions = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Failed to fetch submissions', error: err.message });
   }
 };
+<<<<<<< HEAD
 
 /**
  * GET /api/submissions/faculty/summary
@@ -943,3 +1012,5 @@ exports.getFacultySummary = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Error fetching summary', error: error.message });
   }
 };
+=======
+>>>>>>> d809dc4 (solved some frontend vulnerability)

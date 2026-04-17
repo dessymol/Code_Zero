@@ -7,7 +7,12 @@ const {
   Course,
   User,
   sequelize,
+<<<<<<< HEAD
   Student
+=======
+  Student,
+  Testcase
+>>>>>>> d809dc4 (solved some frontend vulnerability)
 } = require('../models');
 
 /**
@@ -44,6 +49,10 @@ exports.createQuestion = async (req, res) => {
       course_id,
       language_id,
       score,
+<<<<<<< HEAD
+=======
+      duration = 10,
+>>>>>>> d809dc4 (solved some frontend vulnerability)
     } = req.body || {};
 
     // basic validation
@@ -69,6 +78,10 @@ exports.createQuestion = async (req, res) => {
       faculty_id: facultyId === null ? null : Number(facultyId),
       language_id: Number(language_id),
       score: Number(score),
+<<<<<<< HEAD
+=======
+      duration: Number(duration),
+>>>>>>> d809dc4 (solved some frontend vulnerability)
     };
 
     const newQuestion = await Question.create(payload);
@@ -105,7 +118,11 @@ exports.updateQuestion = async (req, res) => {
       return res.status(403).json({ message: 'Forbidden: not owner' });
     }
 
+<<<<<<< HEAD
     const allowed = ['title', 'description', 'sample_input', 'sample_output', 'language_id', 'score', 'faculty_id'];
+=======
+    const allowed = ['title', 'description', 'sample_input', 'sample_output', 'duration', 'language_id', 'score', 'faculty_id'];
+>>>>>>> d809dc4 (solved some frontend vulnerability)
     const updates = {};
     for (const k of allowed) {
       if (req.body[k] !== undefined) updates[k] = req.body[k];
@@ -560,7 +577,11 @@ exports.getAvailableQuestionsForStudent = async (req, res, next) => {
         model: Question,
         required: true,
         where: { course_id: courseId },
+<<<<<<< HEAD
         attributes: ['id', 'title', 'description', 'sample_input', 'sample_output', 'language_id', 'score']
+=======
+        attributes: ['id', 'title', 'description', 'sample_input', 'sample_output', 'duration']
+>>>>>>> d809dc4 (solved some frontend vulnerability)
       }],
       // if you have pagination you can add limit/offset
     });

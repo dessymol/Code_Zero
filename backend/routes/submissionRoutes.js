@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+<<<<<<< HEAD
 const {
   submitCode,
   getSubmissionFeedback,
@@ -11,6 +12,17 @@ const {
   getMySubmissions,
   getCourseSubmissionsForFaculty,
   getFacultySummary,
+=======
+const { 
+  submitCode, 
+  getCompletedCourses, 
+  getQuestionsForStudentCourse,
+  getAllSubmissionsByCourse, 
+  getCourseSubmissionsForAdmin, 
+  getSubmissionsByCourseAndBatch, 
+  getMySubmissions,
+  getCourseSubmissionsForFaculty,
+>>>>>>> d809dc4 (solved some frontend vulnerability)
   // NEW: Add these imports
   executeCode,
   getSupportedLanguages,
@@ -37,9 +49,12 @@ router.post('/execute', studentAuth, executeCode);
 router.post('/submit', studentAuth, submitCode);
 // For production: router.post('/submit', authMiddleware, roleMiddleware('student'), submitCode);
 
+<<<<<<< HEAD
 // Student polls this after submitting
 router.get('/:id/feedback', studentAuth, getSubmissionFeedback);
 
+=======
+>>>>>>> d809dc4 (solved some frontend vulnerability)
 // Student gets their completed courses
 router.get('/completed-courses', studentAuth, getCompletedCourses);
 
@@ -54,20 +69,32 @@ router.get('/admin/course/:courseId', adminAuth, getCourseSubmissionsForAdmin);
 
 // Admin gets submissions for a specific batch
 router.get(
+<<<<<<< HEAD
   '/admin/course/:courseId/batch/:batchId',
   authMiddleware,
   roleMiddleware('admin'),
+=======
+  '/admin/course/:courseId/batch/:batchId', 
+  authMiddleware, 
+  roleMiddleware('admin'), 
+>>>>>>> d809dc4 (solved some frontend vulnerability)
   getSubmissionsByCourseAndBatch
 );
 
 // Faculty gets submissions for a course they teach
 router.get(
+<<<<<<< HEAD
   '/faculty/course/:courseId',
   authMiddleware,
+=======
+  '/faculty/course/:courseId', 
+  authMiddleware, 
+>>>>>>> d809dc4 (solved some frontend vulnerability)
   roleMiddleware('faculty'),
   getCourseSubmissionsForFaculty
 );
 
+<<<<<<< HEAD
 // Faculty gets summary of all submissions across their courses
 router.get(
   '/faculty/summary',
@@ -76,6 +103,8 @@ router.get(
   getFacultySummary
 );
 
+=======
+>>>>>>> d809dc4 (solved some frontend vulnerability)
 // Student can see their own submissions
 router.get('/mine', studentAuth, getMySubmissions);
 

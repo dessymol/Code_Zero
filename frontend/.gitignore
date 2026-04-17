@@ -7,11 +7,18 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+<<<<<<< HEAD
 node_modules/
 dist
 dist-ssr
 *.local
 .env
+=======
+node_modules
+dist
+dist-ssr
+*.local
+>>>>>>> d809dc4 (solved some frontend vulnerability)
 
 # Editor directories and files
 .vscode/*

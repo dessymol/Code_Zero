@@ -9,11 +9,17 @@ import { useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import FacultyNavbar from './FacultyNavbar';
 import { motion, AnimatePresence } from 'framer-motion';
+<<<<<<< HEAD
 import { useToast } from '../context/ToastContext';
 
 const API = 'http://localhost:3000/api';
 const SOCKET_URL = 'http://localhost:3000';
 const MotionDiv = motion.div;
+=======
+
+const API = 'http://localhost:3000/api';
+const SOCKET_URL = 'http://localhost:3000';
+>>>>>>> d809dc4 (solved some frontend vulnerability)
 
 const LANGUAGES = [
   { id: 62, name: 'Java', color: '#f89820', icon: '☕' },
@@ -31,14 +37,22 @@ const Modal = ({ isOpen, onClose, title, children, maxWidth = 'max-w-md' }) => {
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+<<<<<<< HEAD
         <MotionDiv
+=======
+        <motion.div
+>>>>>>> d809dc4 (solved some frontend vulnerability)
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
           className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
         />
+<<<<<<< HEAD
         <MotionDiv
+=======
+        <motion.div
+>>>>>>> d809dc4 (solved some frontend vulnerability)
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -56,7 +70,11 @@ const Modal = ({ isOpen, onClose, title, children, maxWidth = 'max-w-md' }) => {
           <div className="p-6 overflow-y-auto">
             {children}
           </div>
+<<<<<<< HEAD
         </MotionDiv>
+=======
+        </motion.div>
+>>>>>>> d809dc4 (solved some frontend vulnerability)
       </div>
     </AnimatePresence>
   );
@@ -83,7 +101,10 @@ const ActionButton = ({ onClick, icon: Icon, label, variant = 'primary', disable
 
 export default function ManageQuestions() {
   const { courseId } = useParams();
+<<<<<<< HEAD
   const toast = useToast();
+=======
+>>>>>>> d809dc4 (solved some frontend vulnerability)
   const token = localStorage.getItem('token') || '';
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
@@ -99,16 +120,33 @@ export default function ManageQuestions() {
     title: '', description: '', sample_input: '', sample_output: '', language_id: LANGUAGES[0].id, score: 100,
   });
   const [saving, setSaving] = useState(false);
+<<<<<<< HEAD
   const [testcaseDialogOpen, setTestcaseDialogOpen] = useState(false);
   const [testcaseQuestion, setTestcaseQuestion] = useState(null);
   const [generatedTestcases, setGeneratedTestcases] = useState([]);
   const [generatingTestcases, setGeneratingTestcases] = useState(false);
   const [approvingTestcases, setApprovingTestcases] = useState(false);
 
+=======
+
+  const selectedBatchId = selectedTab === 0 ? null : batches[selectedTab - 1]?.id;
+>>>>>>> d809dc4 (solved some frontend vulnerability)
   const chatIndex = batches.length + 1;
 
   // --- Logic Helpers ---
 
+<<<<<<< HEAD
+=======
+  const getScore = (q) => {
+    if (!q) return null;
+    const candidates = [q.score, q.raw?.score, q.raw?.points, q.raw?.marks];
+    for (const c of candidates) {
+      if (c != null && !isNaN(c)) return Number(c);
+    }
+    return null;
+  };
+
+>>>>>>> d809dc4 (solved some frontend vulnerability)
   const fetchAll = async () => {
     setLoading(true);
     try {
@@ -187,7 +225,11 @@ export default function ManageQuestions() {
       setOpenDialog(false);
       setEditing(null);
       await fetchAll();
+<<<<<<< HEAD
     } catch { alert('Save failed'); }
+=======
+    } catch (e) { alert('Save failed'); }
+>>>>>>> d809dc4 (solved some frontend vulnerability)
     finally { setSaving(false); }
   };
 
@@ -199,6 +241,7 @@ export default function ManageQuestions() {
     } catch { alert('Delete failed'); }
   };
 
+<<<<<<< HEAD
   const openTestcaseDialog = async (question) => {
     setTestcaseQuestion(question);
     setGeneratedTestcases([]);
@@ -285,6 +328,8 @@ export default function ManageQuestions() {
     }
   };
 
+=======
+>>>>>>> d809dc4 (solved some frontend vulnerability)
   // --- Chat Logic ---
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
@@ -482,6 +527,7 @@ export default function ManageQuestions() {
                           <span className="text-xs font-bold text-slate-500">{enabledCount} batches active</span>
                         </div>
                         <div className="flex gap-1">
+<<<<<<< HEAD
                           <button
                             onClick={() => openTestcaseDialog(q)}
                             className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
@@ -489,6 +535,8 @@ export default function ManageQuestions() {
                           >
                             <FileText size={16} />
                           </button>
+=======
+>>>>>>> d809dc4 (solved some frontend vulnerability)
                           <button onClick={() => { setEditing(q.id); setForm({ ...q, language_id: q.language_id }); setOpenDialog(true); }} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Edit size={16} /></button>
                           <button onClick={() => handleDelete(q.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /></button>
                         </div>
@@ -559,6 +607,7 @@ export default function ManageQuestions() {
         </div>
       </Modal>
 
+<<<<<<< HEAD
       <Modal
         isOpen={testcaseDialogOpen}
         onClose={closeTestcaseDialog}
@@ -652,3 +701,8 @@ export default function ManageQuestions() {
     </div>
   );
 }
+=======
+    </div>
+  );
+}
+>>>>>>> d809dc4 (solved some frontend vulnerability)

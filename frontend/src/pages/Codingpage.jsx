@@ -9,8 +9,13 @@ const JUDGE0_API_URL = import.meta.env.VITE_JUDGE0_URL || 'http://localhost:2358
 const RAPIDAPI_KEY = import.meta.env.VITE_RAPIDAPI_KEY || null;
 const RAPIDAPI_HOST = import.meta.env.VITE_RAPIDAPI_HOST || 'judge0-ce.p.rapidapi.com';
 
+<<<<<<< HEAD
 // Use your backend URL for submissions
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+=======
+// Use your backend URL for submissions (not used for routes here, we keep original hardcoded routes)
+const BACKEND_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+>>>>>>> d809dc4 (solved some frontend vulnerability)
 
 const JUDGE0_SUBMISSIONS_URL = `${JUDGE0_API_URL}/submissions`;
 const JUDGE0_SUBMISSIONS_BATCH_URL = `${JUDGE0_API_URL}/submissions/batch`;
@@ -20,13 +25,21 @@ const getJudge0Headers = () => {
   const headers = {
     'Content-Type': 'application/json',
   };
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> d809dc4 (solved some frontend vulnerability)
   // Add RapidAPI headers if using RapidAPI
   if (RAPIDAPI_KEY && JUDGE0_API_URL.includes('rapidapi.com')) {
     headers['X-RapidAPI-Key'] = RAPIDAPI_KEY;
     headers['X-RapidAPI-Host'] = RAPIDAPI_HOST;
   }
+<<<<<<< HEAD
 
+=======
+  
+>>>>>>> d809dc4 (solved some frontend vulnerability)
   return headers;
 };
 
@@ -40,6 +53,7 @@ const ACKS = [
 
 // ✅ Single consistent mapping: DB language_id → Judge0 language_id + display name
 const LANGUAGE_MAPPING = {
+<<<<<<< HEAD
   62: { name: 'Java', judge0Id: 62 },
   70: { name: 'Python 2', judge0Id: 70 }, // Python 2.7
   71: { name: 'Python 3', judge0Id: 71 }, // Python 3.8
@@ -50,6 +64,18 @@ const LANGUAGE_MAPPING = {
   60: { name: 'Go', judge0Id: 60 },
   78: { name: 'Kotlin', judge0Id: 78 },
   68: { name: 'PHP', judge0Id: 68 },
+=======
+  62: { name: 'Java',       judge0Id: 62 },
+  70: { name: 'Python 2',   judge0Id: 70 }, // Python 2.7
+  71: { name: 'Python 3',   judge0Id: 71 }, // Python 3.8
+  50: { name: 'C',          judge0Id: 50 },
+  54: { name: 'C++',        judge0Id: 54 },
+  63: { name: 'JavaScript', judge0Id: 63 },
+  51: { name: 'C#',         judge0Id: 51 },
+  60: { name: 'Go',         judge0Id: 60 },
+  78: { name: 'Kotlin',     judge0Id: 78 },
+  68: { name: 'PHP',        judge0Id: 68 },
+>>>>>>> d809dc4 (solved some frontend vulnerability)
 };
 
 const findLangName = (id) => {
@@ -107,7 +133,10 @@ const CodingPage = () => {
   const [codes, setCodes] = useState({});
   const [results, setResults] = useState({});
   const [compiling, setCompiling] = useState({});
+<<<<<<< HEAD
   const [feedback, setFeedback] = useState({});
+=======
+>>>>>>> d809dc4 (solved some frontend vulnerability)
   const [submittedQuestions, setSubmittedQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState('');
@@ -256,7 +285,11 @@ const CodingPage = () => {
         return false;
       }
 
+<<<<<<< HEAD
       if ((e.ctrlKey || e.metaKey) && ['c', 'v', 'x'].includes(e.key.toLowerCase())) {
+=======
+      if ((e.ctrlKey || e.metaKey) && ['c','v','x'].includes(e.key.toLowerCase())) {
+>>>>>>> d809dc4 (solved some frontend vulnerability)
         handleViolation(`Copy/Paste/Cut detected: ${e.key}`);
         e.preventDefault();
         return false;
@@ -345,6 +378,7 @@ const CodingPage = () => {
     console.log('🚀 ========== Judge0 Execution Started ==========');
     console.log('📍 Judge0 API URL:', JUDGE0_API_URL);
     console.log('🔑 Using RapidAPI:', JUDGE0_API_URL.includes('rapidapi.com'));
+<<<<<<< HEAD
     console.log('📋 Request Details:', {
       language_id,
       source_length: source.length,
@@ -352,6 +386,15 @@ const CodingPage = () => {
       headers: getJudge0Headers()
     });
 
+=======
+    console.log('📋 Request Details:', { 
+      language_id, 
+      source_length: source.length, 
+      stdin_length: stdin.length,
+      headers: getJudge0Headers()
+    });
+    
+>>>>>>> d809dc4 (solved some frontend vulnerability)
     try {
       console.log('📤 Step 1: Submitting code to Judge0...');
       console.log('Submitting to Judge0:', { language_id, source_length: source.length, stdin_length: stdin.length });
@@ -375,7 +418,11 @@ const CodingPage = () => {
         cpu_time_limit: submissionData.cpu_time_limit,
         memory_limit: submissionData.memory_limit
       });
+<<<<<<< HEAD
 
+=======
+      
+>>>>>>> d809dc4 (solved some frontend vulnerability)
       const createResponse = await axios.post(JUDGE0_SUBMISSIONS_URL, submissionData, {
         headers: getJudge0Headers(),
         timeout: 10000,
@@ -402,7 +449,11 @@ const CodingPage = () => {
         try {
           const pollUrl = `${JUDGE0_SUBMISSIONS_URL}/${token}`;
           console.log(`🔍 Step 4.${attempts + 1}: Polling attempt ${attempts + 1}/${maxAttempts} - GET ${pollUrl}`);
+<<<<<<< HEAD
 
+=======
+          
+>>>>>>> d809dc4 (solved some frontend vulnerability)
           const resultResponse = await axios.get(pollUrl, {
             headers: getJudge0Headers(),
             timeout: 5000,
@@ -411,7 +462,11 @@ const CodingPage = () => {
           result = resultResponse.data;
           const statusId = result.status?.id || result.status_id;
           const statusDesc = result.status?.description || 'Unknown';
+<<<<<<< HEAD
 
+=======
+          
+>>>>>>> d809dc4 (solved some frontend vulnerability)
           console.log(`📊 Poll attempt ${attempts + 1} response:`, {
             statusId,
             statusDescription: statusDesc,
@@ -516,11 +571,19 @@ const CodingPage = () => {
     console.log('🔌 Testing Judge0 connection...');
     console.log('📍 Testing URL:', `${JUDGE0_API_URL}/languages`);
     console.log('🔑 Headers:', getJudge0Headers());
+<<<<<<< HEAD
 
     try {
       const response = await axios.get(`${JUDGE0_API_URL}/languages`, {
         headers: getJudge0Headers(),
         timeout: 5000
+=======
+    
+    try {
+      const response = await axios.get(`${JUDGE0_API_URL}/languages`, { 
+        headers: getJudge0Headers(),
+        timeout: 5000 
+>>>>>>> d809dc4 (solved some frontend vulnerability)
       });
       console.log('✅ Judge0 connection test: SUCCESS');
       console.log('📊 Languages available:', response.data?.length || 0);
@@ -684,8 +747,13 @@ const CodingPage = () => {
       const token = localStorage.getItem('token');
 
       // ✅ Keep your original route exactly
+<<<<<<< HEAD
       const submitResponse = await axios.post(
         `${BACKEND_API_URL}/api/submissions/submit`,
+=======
+      await axios.post(
+        'http://localhost:3000/api/submissions/submit',
+>>>>>>> d809dc4 (solved some frontend vulnerability)
         {
           code,
           language_id: Number(langForQuestion),
@@ -700,6 +768,7 @@ const CodingPage = () => {
         { headers: { Authorization: token ? `Bearer ${token}` : '' } }
       );
 
+<<<<<<< HEAD
       const submissionId = submitResponse.data?.submission?.id;
       if (submissionId) {
         // Set feedback to loading state
@@ -719,6 +788,8 @@ const CodingPage = () => {
           }
         }, delay);
       }
+=======
+>>>>>>> d809dc4 (solved some frontend vulnerability)
       // Mark as submitted
       setSubmittedQuestions(prev => [...new Set([...prev, qid])]);
 
@@ -783,7 +854,11 @@ const CodingPage = () => {
 
         // ✅ Keep your original routes
         const qResp = await axios.get(
+<<<<<<< HEAD
           `${BACKEND_API_URL}/api/submissions/student-questions/${courseId}`,
+=======
+          `http://localhost:3000/api/submissions/student-questions/${courseId}`,
+>>>>>>> d809dc4 (solved some frontend vulnerability)
           { headers }
         );
 
@@ -829,7 +904,11 @@ const CodingPage = () => {
         // Course details for violation limit
         try {
           const courseResp = await axios.get(
+<<<<<<< HEAD
             `${BACKEND_API_URL}/api/courses/get-course/${courseId}`,
+=======
+            `http://localhost:3000/api/courses/get-course/${courseId}`,
+>>>>>>> d809dc4 (solved some frontend vulnerability)
             { headers }
           );
           const courseData = courseResp?.data?.course ? courseResp.data.course : courseResp.data;
@@ -1161,6 +1240,7 @@ const CodingPage = () => {
                 : (results[currentQuestion.id] ? results[currentQuestion.id] : 'Output / compiler messages will appear here.')}
             </div>
 
+<<<<<<< HEAD
             {feedback[currentQuestion?.id]?.status === 'loading' && (
               <div className="mt-3 p-3 rounded border border-gray-200 text-sm text-gray-500">
                 AI feedback generating...
@@ -1182,6 +1262,8 @@ const CodingPage = () => {
               </div>
             )}
 
+=======
+>>>>>>> d809dc4 (solved some frontend vulnerability)
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <button
                 onClick={() => handleCompile(currentQuestion.id)}
