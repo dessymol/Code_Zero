@@ -36,9 +36,23 @@ const testConnection = async () => {
   try {
     await sequelize.authenticate();
     logger.info('Database connection established successfully.');
-    await sequelize.sync({ alter: true, force: false });
 
+    // Sync models with database schema
+    // Use alter: true to add new columns to existing tables
+    const syncOptions = {
+      alter: true,  // Add missing columns to existing tables
+      force: false  // Don't drop/recreate tables
+    };
 
+    try {
+      await sequelize.sync(syncOptions);
+      logger.info('Database schema synchronized successfully.');
+    } catch (syncErr) {
+      logger.warn('Database schema sync encountered an issue:', syncErr.message);
+      logger.warn('This may indicate permission issues or pre-existing schema inconsistencies.');
+      logger.warn('Continuing anyway - some operations may fail if expected columns are missing.');
+      // Don't exit here - let the server start anyway
+    }
 
     //These is for development only just to create the tables inside the database. After ctreation of tables once comment this line. At that time comment the above similar line also.
     // await sequelize.sync({ force: true });

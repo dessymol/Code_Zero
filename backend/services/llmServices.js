@@ -113,15 +113,70 @@ Respond ONLY with this JSON object. No markdown, no explanation outside the JSON
 
 // ── JSON parsers ─────────────────────────────────────────────────
 
+function attemptJsonRepair(text) {
+    // Try to repair truncated JSON by finding the last complete structure
+    let openBraces = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let i = text.length - 1; i >= 0; i--) {
+        const char = text[i];
+
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+
+        if (char === '\\') {
+            escaped = true;
+            continue;
+        }
+
+        if (char === '"') {
+            inString = !inString;
+        } else if (!inString) {
+            if (char === '}') openBraces++;
+            else if (char === '{') {
+                openBraces--;
+                if (openBraces === 0) {
+                    // Found the last complete object
+                    return text.substring(0, i + 1);
+                }
+            }
+        }
+    }
+
+    return text;
+}
+
 function parseJsonArray(raw, label) {
-    const cleaned = stripCodeFences(raw);
+    let cleaned = stripCodeFences(raw);
+
     try {
         const parsed = JSON.parse(cleaned);
         if (!Array.isArray(parsed)) throw new Error('Response is not a JSON array');
         return parsed;
     } catch (err) {
+        // Try to repair truncated JSON
+        console.warn(`[llmService] First parse attempt failed, attempting repair: ${err.message}`);
+
+        try {
+            // Find last complete array bracket
+            const lastBracket = cleaned.lastIndexOf(']');
+            if (lastBracket > 0) {
+                const truncated = cleaned.substring(0, lastBracket + 1);
+                const parsed = JSON.parse(truncated);
+                if (Array.isArray(parsed)) {
+                    console.warn(`[llmService] Successfully repaired truncated ${label} JSON`);
+                    return parsed;
+                }
+            }
+        } catch (repairErr) {
+            console.warn(`[llmService] Repair attempt failed: ${repairErr.message}`);
+        }
+
         console.error(`[llmService] Failed to parse ${label} JSON:`, err.message);
-        console.error('[llmService] Raw response:', raw);
+        console.error(`[llmService] Raw response (first 1000 chars):`, raw.substring(0, 1000));
         throw new Error(`LLM returned invalid JSON for ${label}: ${err.message}`);
     }
 }
@@ -134,7 +189,7 @@ function parseJsonObject(raw, label) {
         return parsed;
     } catch (err) {
         console.error(`[llmService] Failed to parse ${label} JSON:`, err.message);
-        console.error('[llmService] Raw response:', raw);
+        console.error('[llmService] Raw response:', raw.substring(0, 500));
         throw new Error(`LLM returned invalid JSON for ${label}: ${err.message}`);
     }
 }

@@ -153,6 +153,24 @@ if (db.User && db.CourseMessage) {
   db.CourseMessage.belongsTo(db.User, { foreignKey: 'user_id', as: 'User' });
 }
 
+/* ------------------------------- Database Sync ----------------------------------- */
+/**
+ * Synchronize all models with the database.
+ * Use { alter: true } to update existing tables with new columns.
+ * Use { force: true } only for development to drop and recreate tables (destructive).
+ */
+db.syncDatabase = async (options = { alter: true, force: false }) => {
+  try {
+    console.info('[DB Sync] Starting database synchronization...');
+    await sequelize.sync(options);
+    console.info('[DB Sync] Database synchronized successfully');
+    return { success: true, message: 'Database synchronized' };
+  } catch (error) {
+    console.error('[DB Sync] Failed to synchronize database:', error.message);
+    throw error;
+  }
+};
+
 /* ------------------------------- Exports ----------------------------------- */
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;

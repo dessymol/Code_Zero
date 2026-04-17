@@ -249,9 +249,14 @@ export default function ManageQuestions() {
 
     // Prefill reference solution if saved
     setRefSolution(question.reference_solution || '');
+    // DO NOT automatically generate test cases — wait for user to click the Generate button
+  };
+
+  const handleGenerateTestcases = async () => {
+    if (!testcaseQuestion) return;
     setGeneratingTestcases(true);
     try {
-      const res = await axios.post(`${API}/questions/${question.id}/testcases/generate`, {}, { headers });
+      const res = await axios.post(`${API}/questions/${testcaseQuestion.id}/testcases/generate`, {}, { headers });
       const drafts = Array.isArray(res.data?.testcases) ? res.data.testcases : [];
       setGeneratedTestcases(
         drafts.map((tc, index) => ({
@@ -261,10 +266,9 @@ export default function ManageQuestions() {
           is_public: tc?.is_public === true
         }))
       );
+      toast.success('Test cases generated successfully!');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to generate test cases');
-      setTestcaseDialogOpen(false);
-      setTestcaseQuestion(null);
     } finally {
       setGeneratingTestcases(false);
     }
@@ -688,13 +692,22 @@ export default function ManageQuestions() {
               <p className="text-sm font-semibold text-slate-700">Review the generated cases, edit them if needed, remove unwanted ones, then confirm to save.</p>
               <p className="text-xs text-slate-500 mt-1">Only the final reviewed array will be sent for approval.</p>
             </div>
-            <ActionButton
-              label="Add Test Case"
-              icon={Plus}
-              variant="secondary"
-              onClick={addGeneratedTestcase}
-              disabled={generatingTestcases || approvingTestcases}
-            />
+            <div className="flex gap-2">
+              <ActionButton
+                label={generatingTestcases ? "Generating..." : "Generate Test Cases"}
+                icon={RefreshCw}
+                variant="primary"
+                onClick={handleGenerateTestcases}
+                disabled={generatingTestcases || approvingTestcases}
+              />
+              <ActionButton
+                label="Add Test Case"
+                icon={Plus}
+                variant="secondary"
+                onClick={addGeneratedTestcase}
+                disabled={generatingTestcases || approvingTestcases}
+              />
+            </div>
           </div>
 
           {generatingTestcases ? (

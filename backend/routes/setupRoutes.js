@@ -30,6 +30,38 @@ router.get('/auth/status', async (req, res) => {
   res.status(200).json({ initialized: !!getInitState() });
 });
 
+/**
+ * POST /api/setup/sync-db
+ * For development only: manually sync database schema
+ * Requires SETUP_SECRET header if configured
+ */
+router.post('/setup/sync-db', async (req, res, next) => {
+  try {
+    if (!checkSetupSecret(req)) {
+      return res.status(403).json({ success: false, message: 'Invalid setup secret' });
+    }
+
+    const { force } = req.body || {};
+    const options = {
+      alter: true,
+      force: Boolean(force)
+    };
+
+    console.log('[Setup] Syncing database with options:', options);
+    const result = await sequelize.sync(options);
+
+    res.status(200).json({
+      success: true,
+      message: 'Database synced successfully',
+      options,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('[Setup] DB sync error:', err);
+    next(err);
+  }
+});
+
 router.get('/setup', requireNotInitialized, (req, res) => {
   res.status(200).json({ initialized: false, message: 'Setup required' });
 });
