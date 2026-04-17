@@ -116,9 +116,24 @@ exports.verify = async (req, res) => {
         const normalizeOutput = (s = '') =>
             String(s || '').replace(/\r\n/g, '\n').split('\n').map(l => l.trim()).join('\n').trim();
 
+        console.log(`[testcaseController] verify: Running ${testcases.length} testcases for question ${question.id}`);
+        console.log(`[testcaseController] Language ID: ${question.language_id}`);
+        console.log(`[testcaseController] Reference solution (first 200 chars): ${question.reference_solution?.substring(0, 200)}`);
+        console.log(`[testcaseController] Reference solution length: ${question.reference_solution?.length}`);
+
+        // Check for Python version issues
+        if (question.language_id === 70 && question.reference_solution.includes('input()') && !question.reference_solution.includes('raw_input()')) {
+            console.warn(`[testcaseController] ⚠️  WARNING: Code uses input() but language is Python 2.7 (ID 70). Python 2 uses raw_input() for string input. Consider changing to Python 3 (ID 71).`);
+        }
+        if (question.language_id === 71 && question.reference_solution.includes('raw_input()')) {
+            console.warn(`[testcaseController] ⚠️  WARNING: Code uses raw_input() but language is Python 3 (ID 71). Python 3 uses input() for string input.`);
+        }
+
         const results = await Promise.all(testcases.map(async (tc) => {
             let result;
             try {
+                console.log(`[testcaseController] Running testcase ${tc.id}: input length=${tc.input?.length || 0}`);
+
                 result = await judge0Service.submitCode(
                     question.reference_solution,
                     question.language_id,
@@ -126,23 +141,37 @@ exports.verify = async (req, res) => {
                     tc.output || '',
                     true
                 );
+
+                console.log(`[testcaseController] Testcase ${tc.id} result: status=${result.status?.id}, stdout length=${result.stdout?.length || 0}`);
+
+                if (result.status?.id === 11) {
+                    // Runtime error - log stderr
+                    console.error(`[testcaseController] Testcase ${tc.id} Runtime Error: ${result.stderr || 'No error message'}`);
+                }
             } catch (e) {
+                console.error(`[testcaseController] Testcase ${tc.id} error:`, e.message);
                 return { testcase_id: tc.id, input: tc.input, passed: false, error: e.message };
             }
             const actual = normalizeOutput(result.stdout || '');
             const expected = normalizeOutput(tc.output || '');
             const statusId = result.status ? result.status.id : 0;
+            const passed = statusId === 3 && actual === expected;
+
+            console.log(`[testcaseController] Testcase ${tc.id}: ${passed ? 'PASS' : 'FAIL'} (status=${statusId})`);
+
             return {
                 testcase_id: tc.id,
                 input: tc.input,
                 expected,
                 actual,
-                passed: statusId === 3 && actual === expected,
+                passed,
                 status: result.status?.description || 'Unknown'
             };
         }));
 
         const allPassed = results.every(r => r.passed);
+        console.log(`[testcaseController] Verification complete: ${results.filter(r => r.passed).length}/${results.length} passed`);
+
         return res.json({ success: true, allPassed, results });
     } catch (err) {
         console.error('[testcaseController] verify error:', err.message);

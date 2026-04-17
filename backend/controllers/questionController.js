@@ -105,7 +105,7 @@ exports.updateQuestion = async (req, res) => {
       return res.status(403).json({ message: 'Forbidden: not owner' });
     }
 
-    const allowed = ['title', 'description', 'sample_input', 'sample_output', 'language_id', 'score', 'faculty_id'];
+    const allowed = ['title', 'description', 'sample_input', 'sample_output', 'language_id', 'score', 'faculty_id', 'reference_solution'];
     const updates = {};
     for (const k of allowed) {
       if (req.body[k] !== undefined) updates[k] = req.body[k];
@@ -164,6 +164,7 @@ exports.getQuestionBankForCourse = async (req, res) => {
       'faculty_id',
       'language_id',
       'score',
+      'reference_solution',
       'created_at',
       'updated_at'
     ];

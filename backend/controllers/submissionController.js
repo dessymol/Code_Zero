@@ -189,11 +189,12 @@ exports.submitCode = async (req, res) => {
 
     let awarded_score = 0;
     const qScore = Number(question.score) || 0;
+    let testResultRows = []; // Declare here so it's in scope later
 
     if (testcases.length > 0) {
       // ── Multi-testcase scoring path ───────────────────────────────
       let passedCount = 0;
-      const testResultRows = [];
+      testResultRows = []; // Initialize for this path
 
       for (const tc of testcases) {
         let tcResult;

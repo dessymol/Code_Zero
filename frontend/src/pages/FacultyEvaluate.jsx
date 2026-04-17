@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   RefreshCw, BarChart2, Search, Printer, Calendar, Hash, Mail,
   CheckCircle, XCircle, Clock, ChevronDown, ChevronUp, Download, Filter,
-  ArrowLeft, FileText, Code, Globe, User
+  ArrowLeft, FileText, Code, Globe, User, X
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -30,7 +30,7 @@ const Modal = ({ isOpen, onClose, title, children }) => {
           <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
             <h3 className="text-lg font-bold text-slate-800">{title}</h3>
             <button onClick={onClose} className="p-2 -mr-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors">
-              <XCircle size={20} />
+              <X size={20} />
             </button>
           </div>
           <div className="p-0 overflow-y-auto custom-scrollbar bg-slate-50">
@@ -204,7 +204,7 @@ export default function FacultyEvaluate() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       // optimistically update local state
-      setSubmissions(prev =>
+      setAllSubmissions(prev =>
         prev.map(s =>
           s.id === editingScore.submissionId
             ? { ...s, score: editingScore.value, manually_overridden: true }
@@ -227,7 +227,7 @@ export default function FacultyEvaluate() {
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setSubmissions(prev =>
+      setAllSubmissions(prev =>
         prev.map(s => s.id === submissionId ? { ...s, approved: true } : s)
       );
     } catch (err) {
