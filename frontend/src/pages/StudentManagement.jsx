@@ -14,7 +14,10 @@ import Pagination from '../components/Pagination';
 const API_BASE = 'http://localhost:3000/api';
 const API_COURSES = `${API_BASE}/courses/get-all-courses`;
 const API_STUDENTS = `${API_BASE}/students`;
+<<<<<<< HEAD
 const validateEmail = (email) => /^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(email.trim());
+=======
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
 
 // --- Components ---
 
@@ -98,7 +101,10 @@ const StudentManagement = () => {
   const [templateLoading, setTemplateLoading] = useState(false);
   const [templateUploading, setTemplateUploading] = useState(false);
   const [phoneError, setPhoneError] = useState({ add: false, edit: false });
+<<<<<<< HEAD
   const [emailError, setEmailError] = useState({ add: false, edit: false });
+=======
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
 
   // search/snack
   const [searchQuery, setSearchQuery] = useState('');
@@ -138,6 +144,7 @@ const StudentManagement = () => {
     }
   };
 
+<<<<<<< HEAD
   const handleAddEmailChange = (e) => {
     const email = e.target.value;
     setAddForm(prev => ({ ...prev, email }));
@@ -150,6 +157,8 @@ const StudentManagement = () => {
     setEmailError(prev => ({ ...prev, edit: email.length > 0 && !validateEmail(email) }));
   };
 
+=======
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
   // ---------- loaders ----------
   const loadCourses = async () => {
     try {
@@ -345,6 +354,7 @@ const StudentManagement = () => {
       const selectedCourse = courses.find(c => String(c.id) === String(courseId));
       if (!selectedCourse) { toast.error('Select a course first'); return; }
       if (!selectedBatchName || !selectedBatchCode) { toast.error('Select batch name and code'); return; }
+<<<<<<< HEAD
       if (!validateEmail(addForm.email)) { toast.error('Enter a valid Gmail address ending with @gmail.com'); return; }
       if (addForm.phone && !validatePhone(addForm.phone)) { toast.error('Enter a valid 10-digit phone number'); return; }
 
@@ -352,6 +362,13 @@ const StudentManagement = () => {
         name: addForm.name,
         email: addForm.email.trim().toLowerCase(),
         phone: addForm.phone.trim(),
+=======
+
+      const payload = {
+        name: addForm.name,
+        email: addForm.email,
+        phone: addForm.phone,
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
         course_code: selectedCourse.course_code
       };
       const res = await axios.post(`${API_STUDENTS}/add`, payload, { headers: authHeader });
@@ -365,8 +382,11 @@ const StudentManagement = () => {
       setOpenAdd(false);
       await loadStudents(courseId, selectedBatchId || '');
       setAddForm({ name: '', email: '', phone: '' });
+<<<<<<< HEAD
       setEmailError({ add: false, edit: false });
       setPhoneError({ add: false, edit: false });
+=======
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
       toast.success('Student added successfully!');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Add student failed');
@@ -375,14 +395,18 @@ const StudentManagement = () => {
 
   const openEditDialog = (student) => {
     setEditForm({ id: student.id, name: student.name || '', email: student.email || '', phone: student.phone || '' });
+<<<<<<< HEAD
     setEmailError(prev => ({ ...prev, edit: student.email ? !validateEmail(student.email) : false }));
     setPhoneError(prev => ({ ...prev, edit: student.phone ? !validatePhone(student.phone) : false }));
+=======
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
     setOpenEdit(true);
   };
 
   const handleUpdateStudent = async () => {
     try {
       if (!editForm.id) return;
+<<<<<<< HEAD
       if (!validateEmail(editForm.email)) { toast.error('Enter a valid Gmail address ending with @gmail.com'); return; }
       if (editForm.phone && !validatePhone(editForm.phone)) { toast.error('Enter a valid 10-digit phone number'); return; }
       await axios.put(`${API_STUDENTS}/update/${editForm.id}`, {
@@ -394,6 +418,15 @@ const StudentManagement = () => {
       await loadStudents(courseId, selectedBatchId || '');
       setEmailError(prev => ({ ...prev, edit: false }));
       setPhoneError(prev => ({ ...prev, edit: false }));
+=======
+      await axios.put(`${API_STUDENTS}/update/${editForm.id}`, {
+        name: editForm.name,
+        email: editForm.email,
+        phone: editForm.phone
+      }, { headers: authHeader });
+      setOpenEdit(false);
+      await loadStudents(courseId, selectedBatchId || '');
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
       toast.success('Student updated successfully');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Update failed');
@@ -920,11 +953,18 @@ const StudentManagement = () => {
             <label className="block text-sm font-bold text-slate-700 mb-1">Email Address</label>
             <input
               type="email"
+<<<<<<< HEAD
               className={`lms-input ${emailError.add ? 'border-red-500 ring-red-100 focus:ring-red-100 focus:border-red-500' : ''}`}
               value={addForm.email}
               onChange={handleAddEmailChange}
             />
             {emailError.add && <p className="text-red-500 text-xs mt-1 font-medium">Enter a valid Gmail address ending with `@gmail.com`</p>}
+=======
+              className="lms-input"
+              value={addForm.email}
+              onChange={e => setAddForm(prev => ({ ...prev, email: e.target.value }))}
+            />
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
           </div>
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-1">Phone Number (Optional)</label>
@@ -955,7 +995,11 @@ const StudentManagement = () => {
               label="Add Student"
               variant="primary"
               onClick={handleAdd}
+<<<<<<< HEAD
               disabled={!addForm.name || !addForm.email || phoneError.add || emailError.add}
+=======
+              disabled={!addForm.name || !addForm.email || phoneError.add}
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
             />
           </div>
         </div>
@@ -977,11 +1021,18 @@ const StudentManagement = () => {
             <label className="block text-sm font-bold text-slate-700 mb-1">Email Address</label>
             <input
               type="email"
+<<<<<<< HEAD
               className={`lms-input ${emailError.edit ? 'border-red-500 ring-red-100 focus:ring-red-100 focus:border-red-500' : ''}`}
               value={editForm.email}
               onChange={handleEditEmailChange}
             />
             {emailError.edit && <p className="text-red-500 text-xs mt-1 font-medium">Enter a valid Gmail address ending with `@gmail.com`</p>}
+=======
+              className="lms-input"
+              value={editForm.email}
+              onChange={e => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+            />
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
           </div>
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-1">Phone Number</label>
@@ -1002,7 +1053,11 @@ const StudentManagement = () => {
               label="Save Changes"
               variant="primary"
               onClick={handleUpdateStudent}
+<<<<<<< HEAD
               disabled={!editForm.name || !editForm.email || phoneError.edit || emailError.edit}
+=======
+              disabled={!editForm.name || !editForm.email || phoneError.edit}
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
             />
           </div>
         </div>

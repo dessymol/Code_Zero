@@ -5,8 +5,11 @@ import axios from 'axios';
 import { useToast } from '../context/ToastContext';
 
 const API_BASE = 'http://localhost:3000/api/v1/users';
+<<<<<<< HEAD
 const validatePhone = (phone) => /^[6-9]\d{9}$/.test(phone);
 const validateEmail = (email) => /^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(email.trim());
+=======
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
 
 const Modal = ({ isOpen, onClose, title, children, maxWidth = 'max-w-md' }) => {
   if (!isOpen) return null;
@@ -25,7 +28,11 @@ const Modal = ({ isOpen, onClose, title, children, maxWidth = 'max-w-md' }) => {
 
 const COLORS = ['#2563eb','#059669','#7c3aed','#d97706','#dc2626','#0891b2','#4f46e5'];
 
+<<<<<<< HEAD
 const FacultyForm = ({ facultyForm, setFacultyForm, submitting, isEdit, onSubmit, onCancel, emailError, phoneError }) => (
+=======
+const FacultyForm = ({ facultyForm, setFacultyForm, submitting, isEdit, onSubmit, onCancel }) => (
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
   <form className="space-y-4" onSubmit={e => { e.preventDefault(); onSubmit(); }}>
     <div>
       <label htmlFor="faculty-name" className="block text-sm font-semibold text-slate-700 mb-1.5">Full Name<span className="text-red-500 ml-0.5">*</span></label>
@@ -34,6 +41,7 @@ const FacultyForm = ({ facultyForm, setFacultyForm, submitting, isEdit, onSubmit
     </div>
     <div>
       <label htmlFor="faculty-email" className="block text-sm font-semibold text-slate-700 mb-1.5">Email Address<span className="text-red-500 ml-0.5">*</span></label>
+<<<<<<< HEAD
       <input id="faculty-email" type="email" autoComplete="email" required placeholder="john@gmail.com"
         className={`lms-input ${emailError ? 'border-red-500 ring-red-100 focus:ring-red-100 focus:border-red-500' : ''}`}
         value={facultyForm.email} onChange={e => setFacultyForm(prev => ({ ...prev, email: e.target.value }))} />
@@ -48,6 +56,15 @@ const FacultyForm = ({ facultyForm, setFacultyForm, submitting, isEdit, onSubmit
           setFacultyForm(prev => ({ ...prev, phone }));
         }} />
       {phoneError && <p className="text-red-500 text-xs mt-1 font-medium">Enter exactly 10 digits starting with `6`, `7`, `8`, or `9`.</p>}
+=======
+      <input id="faculty-email" type="email" autoComplete="email" required placeholder="john@example.com" className="lms-input"
+        value={facultyForm.email} onChange={e => setFacultyForm(prev => ({ ...prev, email: e.target.value }))} />
+    </div>
+    <div>
+      <label htmlFor="faculty-phone" className="block text-sm font-semibold text-slate-700 mb-1.5">Phone Number</label>
+      <input id="faculty-phone" type="text" autoComplete="tel" placeholder="+91 98765 43210" className="lms-input"
+        value={facultyForm.phone} onChange={e => setFacultyForm(prev => ({ ...prev, phone: e.target.value }))} />
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
     </div>
     {isEdit && (
       <div className="flex items-start gap-2.5 p-3 bg-amber-50 rounded-xl border border-amber-200">
@@ -62,7 +79,11 @@ const FacultyForm = ({ facultyForm, setFacultyForm, submitting, isEdit, onSubmit
     </div>
     <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
       <button type="button" onClick={onCancel} className="lms-btn-secondary">Cancel</button>
+<<<<<<< HEAD
       <button type="submit" disabled={submitting || emailError || phoneError || (!isEdit && (!facultyForm.name || !facultyForm.email || !facultyForm.password))} className="lms-btn-primary">
+=======
+      <button type="submit" disabled={submitting || (!isEdit && (!facultyForm.name || !facultyForm.email || !facultyForm.password))} className="lms-btn-primary">
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
         {submitting ? <RefreshCw size={15} className="animate-spin" /> : isEdit ? <><CheckCircle size={15} /> Save Changes</> : <><UserPlus size={15} /> Add Faculty</>}
       </button>
     </div>
@@ -80,9 +101,12 @@ const FacultyManagement = () => {
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
+<<<<<<< HEAD
   const emailError = facultyForm.email.length > 0 && !validateEmail(facultyForm.email);
   const phoneError = facultyForm.phone.length > 0 && !validatePhone(facultyForm.phone);
 
+=======
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
   const fetchFaculties = async () => {
     setLoading(true);
     try {
@@ -103,6 +127,7 @@ const FacultyManagement = () => {
   const resetForm = () => setFacultyForm({ name: '', email: '', phone: '', password: '' });
 
   const handleAdd = async () => {
+<<<<<<< HEAD
     if (!validateEmail(facultyForm.email)) {
       toast.error('Enter a valid Gmail address ending with @gmail.com');
       return;
@@ -119,6 +144,12 @@ const FacultyManagement = () => {
         email: facultyForm.email.trim().toLowerCase(),
         phone: facultyForm.phone.trim()
       }, { headers: { Authorization: `Bearer ${token}` } });
+=======
+    setSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_BASE}/add-faculty`, facultyForm, { headers: { Authorization: `Bearer ${token}` } });
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
       setOpenAdd(false); resetForm(); fetchFaculties();
       toast.success('Faculty added successfully');
     } catch (err) { toast.error(err.response?.data?.message || 'Failed to add faculty'); }
@@ -131,6 +162,7 @@ const FacultyManagement = () => {
   };
 
   const handleUpdate = async () => {
+<<<<<<< HEAD
     if (!validateEmail(facultyForm.email)) {
       toast.error('Enter a valid Gmail address ending with @gmail.com');
       return;
@@ -147,6 +179,12 @@ const FacultyManagement = () => {
         email: facultyForm.email.trim().toLowerCase(),
         phone: facultyForm.phone.trim()
       }, { headers: { Authorization: `Bearer ${token}` } });
+=======
+    setSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_BASE}/faculties/update/${editingId}`, facultyForm, { headers: { Authorization: `Bearer ${token}` } });
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
       setOpenEdit(false); setEditingId(null); fetchFaculties();
       toast.success('Faculty updated successfully');
     } catch (err) { toast.error(err.response?.data?.message || 'Failed to update faculty'); }
@@ -331,8 +369,11 @@ const FacultyManagement = () => {
           isEdit={false}
           onSubmit={handleAdd}
           onCancel={() => setOpenAdd(false)}
+<<<<<<< HEAD
           emailError={emailError}
           phoneError={phoneError}
+=======
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
         />
       </Modal>
       <Modal isOpen={openEdit} onClose={() => setOpenEdit(false)} title="Edit Faculty Member">
@@ -343,8 +384,11 @@ const FacultyManagement = () => {
           isEdit={true}
           onSubmit={handleUpdate}
           onCancel={() => setOpenEdit(false)}
+<<<<<<< HEAD
           emailError={emailError}
           phoneError={phoneError}
+=======
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
         />
       </Modal>
     </AdminLayout>
