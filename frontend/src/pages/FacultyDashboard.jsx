@@ -24,6 +24,7 @@ const readNum = (obj, ...keys) => {
   return 0;
 };
 
+<<<<<<< HEAD
 const uniqueByStudent = (students = []) => {
   const seen = new Set();
   return students.filter((student) => {
@@ -36,6 +37,8 @@ const uniqueByStudent = (students = []) => {
   });
 };
 
+=======
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
 function Donut({ data = {}, size = 120, subtitle = '' }) {
   const entries = Object.entries(data || {});
   const total = Math.max(entries.reduce((s, [, v]) => s + (Number(v) || 0), 0), 1);
@@ -232,6 +235,7 @@ export default function FacultyDashboard() {
     try {
       const res = await axios.get(`${API}/courses/faculty-courses`, { headers });
       const list = Array.isArray(res.data?.courses) ? res.data.courses : [];
+<<<<<<< HEAD
 
       await Promise.all(list.map(async (c) => {
         if (readNum(c, 'studentCount', 'count', 'students') > 0) return;
@@ -244,6 +248,8 @@ export default function FacultyDashboard() {
         }
       }));
 
+=======
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
       const missing = list.filter(c => (c.submissionCount === undefined || c.submissionCount === null)).slice(0, 6);
       await Promise.all(missing.map(async (c) => {
         try {
@@ -338,6 +344,7 @@ export default function FacultyDashboard() {
   const totalSubmissions = courses.reduce((s, c) => s + readNum(c, 'submissionCount', 'submissions'), 0);
   const avgPerCourse = totalCourses ? Math.round(totalSubmissions / totalCourses) : 0;
 
+<<<<<<< HEAD
   const courseStudentMap = useMemo(() => {
     const map = new Map();
     courses.forEach((course) => {
@@ -347,6 +354,8 @@ export default function FacultyDashboard() {
     return map;
   }, [courses]);
 
+=======
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
   const statusCounts = useMemo(() => {
     if (summary && summary.courseStatus) return summary.courseStatus;
     const m = {};
@@ -360,6 +369,7 @@ export default function FacultyDashboard() {
   const groupedSeries = useMemo(() => {
     if (summary && Array.isArray(summary.courses)) {
       const submissions = { name: 'Submissions', values: (summary.courses || []).slice(0, 6).map(s => ({ label: s.name || s.course_name, value: s.submissionsCount || s.submissions || 0 })) };
+<<<<<<< HEAD
       const students = {
         name: 'Students',
         values: (summary.courses || []).slice(0, 6).map(s => {
@@ -368,13 +378,22 @@ export default function FacultyDashboard() {
           return { label: s.name || s.course_name, value: Math.max(readNum(s, 'studentCount', 'students'), fallback) };
         })
       };
+=======
+      const students = { name: 'Students', values: (summary.courses || []).slice(0, 6).map(s => ({ label: s.name || s.course_name, value: s.studentCount || s.students || 0 })) };
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
       return [submissions, students];
     }
     const sorted = courses.slice().sort((a, b) => readNum(b, 'submissionCount', 'submissions') - readNum(a, 'submissionCount', 'submissions')).slice(0, 6);
     const submissions = { name: 'Submissions', values: sorted.map(c => ({ label: c.name || `C${c.id}`, value: readNum(c, 'submissionCount', 'submissions') })) };
+<<<<<<< HEAD
     const students = { name: 'Students', values: sorted.map(c => ({ label: c.name || `C${c.id}`, value: readNum(c, 'studentCount', 'count', 'students') })) };
     return [submissions, students];
   }, [courses, summary, courseStudentMap]);
+=======
+    const students = { name: 'Students', values: sorted.map(c => ({ label: c.name || `C${c.id}`, value: readNum(c, 'studentCount', 'count') })) };
+    return [submissions, students];
+  }, [courses, summary]);
+>>>>>>> ec8f2e530434846977327e179d7796b1ebf033db
 
   const areaTimeseries = useMemo(() => {
     if (summary && Array.isArray(summary.timeseries)) {
