@@ -5,6 +5,11 @@ import axios from 'axios';
 import { useToast } from '../context/ToastContext';
 
 const API_BASE = 'http://localhost:3000/api/v1/users';
+<<<<<<< HEAD
+=======
+const validatePhone = (phone) => /^[6-9]\d{9}$/.test(phone);
+const validateEmail = (email) => /^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(email.trim());
+>>>>>>> e9c6f67 (fixed merge conflicts)
 
 const Modal = ({ isOpen, onClose, title, children, maxWidth = 'max-w-md' }) => {
   if (!isOpen) return null;
@@ -23,7 +28,11 @@ const Modal = ({ isOpen, onClose, title, children, maxWidth = 'max-w-md' }) => {
 
 const COLORS = ['#2563eb','#059669','#7c3aed','#d97706','#dc2626','#0891b2','#4f46e5'];
 
+<<<<<<< HEAD
 const FacultyForm = ({ facultyForm, setFacultyForm, submitting, isEdit, onSubmit, onCancel }) => (
+=======
+const FacultyForm = ({ facultyForm, setFacultyForm, submitting, isEdit, onSubmit, onCancel, emailError, phoneError }) => (
+>>>>>>> e9c6f67 (fixed merge conflicts)
   <form className="space-y-4" onSubmit={e => { e.preventDefault(); onSubmit(); }}>
     <div>
       <label htmlFor="faculty-name" className="block text-sm font-semibold text-slate-700 mb-1.5">Full Name<span className="text-red-500 ml-0.5">*</span></label>
@@ -32,6 +41,7 @@ const FacultyForm = ({ facultyForm, setFacultyForm, submitting, isEdit, onSubmit
     </div>
     <div>
       <label htmlFor="faculty-email" className="block text-sm font-semibold text-slate-700 mb-1.5">Email Address<span className="text-red-500 ml-0.5">*</span></label>
+<<<<<<< HEAD
       <input id="faculty-email" type="email" autoComplete="email" required placeholder="john@example.com" className="lms-input"
         value={facultyForm.email} onChange={e => setFacultyForm(prev => ({ ...prev, email: e.target.value }))} />
     </div>
@@ -39,6 +49,22 @@ const FacultyForm = ({ facultyForm, setFacultyForm, submitting, isEdit, onSubmit
       <label htmlFor="faculty-phone" className="block text-sm font-semibold text-slate-700 mb-1.5">Phone Number</label>
       <input id="faculty-phone" type="text" autoComplete="tel" placeholder="+91 98765 43210" className="lms-input"
         value={facultyForm.phone} onChange={e => setFacultyForm(prev => ({ ...prev, phone: e.target.value }))} />
+=======
+      <input id="faculty-email" type="email" autoComplete="email" required placeholder="john@gmail.com"
+        className={`lms-input ${emailError ? 'border-red-500 ring-red-100 focus:ring-red-100 focus:border-red-500' : ''}`}
+        value={facultyForm.email} onChange={e => setFacultyForm(prev => ({ ...prev, email: e.target.value }))} />
+      {emailError && <p className="text-red-500 text-xs mt-1 font-medium">Enter a valid Gmail address ending with `@gmail.com`.</p>}
+    </div>
+    <div>
+      <label htmlFor="faculty-phone" className="block text-sm font-semibold text-slate-700 mb-1.5">Phone Number</label>
+      <input id="faculty-phone" type="text" autoComplete="tel" inputMode="tel" placeholder="9876543210"
+        className={`lms-input ${phoneError ? 'border-red-500 ring-red-100 focus:ring-red-100 focus:border-red-500' : ''}`}
+        value={facultyForm.phone} onChange={e => {
+          const phone = e.target.value.replace(/\D/g, '').slice(0, 10);
+          setFacultyForm(prev => ({ ...prev, phone }));
+        }} />
+      {phoneError && <p className="text-red-500 text-xs mt-1 font-medium">Enter exactly 10 digits starting with `6`, `7`, `8`, or `9`.</p>}
+>>>>>>> e9c6f67 (fixed merge conflicts)
     </div>
     {isEdit && (
       <div className="flex items-start gap-2.5 p-3 bg-amber-50 rounded-xl border border-amber-200">
@@ -53,7 +79,11 @@ const FacultyForm = ({ facultyForm, setFacultyForm, submitting, isEdit, onSubmit
     </div>
     <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
       <button type="button" onClick={onCancel} className="lms-btn-secondary">Cancel</button>
+<<<<<<< HEAD
       <button type="submit" disabled={submitting || (!isEdit && (!facultyForm.name || !facultyForm.email || !facultyForm.password))} className="lms-btn-primary">
+=======
+      <button type="submit" disabled={submitting || emailError || phoneError || (!isEdit && (!facultyForm.name || !facultyForm.email || !facultyForm.password))} className="lms-btn-primary">
+>>>>>>> e9c6f67 (fixed merge conflicts)
         {submitting ? <RefreshCw size={15} className="animate-spin" /> : isEdit ? <><CheckCircle size={15} /> Save Changes</> : <><UserPlus size={15} /> Add Faculty</>}
       </button>
     </div>
@@ -71,6 +101,12 @@ const FacultyManagement = () => {
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
+<<<<<<< HEAD
+=======
+  const emailError = facultyForm.email.length > 0 && !validateEmail(facultyForm.email);
+  const phoneError = facultyForm.phone.length > 0 && !validatePhone(facultyForm.phone);
+
+>>>>>>> e9c6f67 (fixed merge conflicts)
   const fetchFaculties = async () => {
     setLoading(true);
     try {
@@ -91,10 +127,29 @@ const FacultyManagement = () => {
   const resetForm = () => setFacultyForm({ name: '', email: '', phone: '', password: '' });
 
   const handleAdd = async () => {
+<<<<<<< HEAD
     setSubmitting(true);
     try {
       const token = localStorage.getItem('token');
       await axios.post(`${API_BASE}/add-faculty`, facultyForm, { headers: { Authorization: `Bearer ${token}` } });
+=======
+    if (!validateEmail(facultyForm.email)) {
+      toast.error('Enter a valid Gmail address ending with @gmail.com');
+      return;
+    }
+    if (facultyForm.phone && !validatePhone(facultyForm.phone)) {
+      toast.error('Enter a valid 10-digit phone number starting with 6, 7, 8, or 9');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_BASE}/add-faculty`, {
+        ...facultyForm,
+        email: facultyForm.email.trim().toLowerCase(),
+        phone: facultyForm.phone.trim()
+      }, { headers: { Authorization: `Bearer ${token}` } });
+>>>>>>> e9c6f67 (fixed merge conflicts)
       setOpenAdd(false); resetForm(); fetchFaculties();
       toast.success('Faculty added successfully');
     } catch (err) { toast.error(err.response?.data?.message || 'Failed to add faculty'); }
@@ -107,10 +162,29 @@ const FacultyManagement = () => {
   };
 
   const handleUpdate = async () => {
+<<<<<<< HEAD
     setSubmitting(true);
     try {
       const token = localStorage.getItem('token');
       await axios.put(`${API_BASE}/faculties/update/${editingId}`, facultyForm, { headers: { Authorization: `Bearer ${token}` } });
+=======
+    if (!validateEmail(facultyForm.email)) {
+      toast.error('Enter a valid Gmail address ending with @gmail.com');
+      return;
+    }
+    if (facultyForm.phone && !validatePhone(facultyForm.phone)) {
+      toast.error('Enter a valid 10-digit phone number starting with 6, 7, 8, or 9');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API_BASE}/faculties/update/${editingId}`, {
+        ...facultyForm,
+        email: facultyForm.email.trim().toLowerCase(),
+        phone: facultyForm.phone.trim()
+      }, { headers: { Authorization: `Bearer ${token}` } });
+>>>>>>> e9c6f67 (fixed merge conflicts)
       setOpenEdit(false); setEditingId(null); fetchFaculties();
       toast.success('Faculty updated successfully');
     } catch (err) { toast.error(err.response?.data?.message || 'Failed to update faculty'); }
@@ -295,6 +369,11 @@ const FacultyManagement = () => {
           isEdit={false}
           onSubmit={handleAdd}
           onCancel={() => setOpenAdd(false)}
+<<<<<<< HEAD
+=======
+          emailError={emailError}
+          phoneError={phoneError}
+>>>>>>> e9c6f67 (fixed merge conflicts)
         />
       </Modal>
       <Modal isOpen={openEdit} onClose={() => setOpenEdit(false)} title="Edit Faculty Member">
@@ -305,6 +384,11 @@ const FacultyManagement = () => {
           isEdit={true}
           onSubmit={handleUpdate}
           onCancel={() => setOpenEdit(false)}
+<<<<<<< HEAD
+=======
+          emailError={emailError}
+          phoneError={phoneError}
+>>>>>>> e9c6f67 (fixed merge conflicts)
         />
       </Modal>
     </AdminLayout>
