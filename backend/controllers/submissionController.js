@@ -840,3 +840,106 @@ exports.getMySubmissions = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Failed to fetch submissions', error: err.message });
   }
 };
+
+/**
+ * GET /api/submissions/faculty/summary
+ * Returns a summary of all submissions for courses taught by the faculty member.
+ * Includes stats like total submissions, average scores, completion status by course.
+ */
+exports.getFacultySummary = async (req, res) => {
+  try {
+    const facultyId = req.user && req.user.id;
+    if (!facultyId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    // Find all courses assigned to this faculty member
+    const assignedCourses = await Course.findAll({
+      include: [{
+        model: User,
+        where: { id: facultyId },
+        attributes: [],
+        through: { attributes: [] }
+      }],
+      attributes: ['id', 'name', 'course_code']
+    });
+
+    if (!assignedCourses || assignedCourses.length === 0) {
+      return res.status(200).json({
+        success: true,
+        summary: {
+          totalCourses: 0,
+          totalSubmissions: 0,
+          averageScore: 0,
+          courseStats: []
+        }
+      });
+    }
+
+    const courseIds = assignedCourses.map(c => c.id);
+
+    // Get all submissions for these courses
+    const submissions = await Submission.findAll({
+      include: [{
+        model: Question,
+        attributes: ['id', 'course_id', 'score'],
+        where: { course_id: { [db.Op.in]: courseIds } }
+      }],
+      attributes: ['id', 'score', 'status', 'createdAt']
+    });
+
+    // Calculate statistics
+    let totalSubmissions = submissions.length;
+    let totalScore = 0;
+    let completedCount = 0;
+
+    submissions.forEach(sub => {
+      if (sub.score !== null) {
+        totalScore += Number(sub.score) || 0;
+        completedCount++;
+      }
+    });
+
+    const averageScore = totalSubmissions > 0 && completedCount > 0
+      ? (totalScore / completedCount).toFixed(2)
+      : 0;
+
+    // Breakdown by course
+    const courseStats = assignedCourses.map(course => {
+      const courseSubmissions = submissions.filter(
+        sub => sub.Question && sub.Question.course_id === course.id
+      );
+
+      let courseScore = 0;
+      let courseCompletedCount = 0;
+      courseSubmissions.forEach(sub => {
+        if (sub.score !== null) {
+          courseScore += Number(sub.score) || 0;
+          courseCompletedCount++;
+        }
+      });
+
+      return {
+        id: course.id,
+        name: course.name,
+        code: course.course_code,
+        totalSubmissions: courseSubmissions.length,
+        completedSubmissions: courseCompletedCount,
+        averageScore: courseCompletedCount > 0
+          ? (courseScore / courseCompletedCount).toFixed(2)
+          : 0
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      summary: {
+        totalCourses: assignedCourses.length,
+        totalSubmissions,
+        averageScore: Number(averageScore),
+        courseStats
+      }
+    });
+  } catch (error) {
+    console.error('getFacultySummary error:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching summary', error: error.message });
+  }
+};

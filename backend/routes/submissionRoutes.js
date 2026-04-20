@@ -10,6 +10,7 @@ const {
   getSubmissionsByCourseAndBatch,
   getMySubmissions,
   getCourseSubmissionsForFaculty,
+  getFacultySummary,
   // NEW: Add these imports
   executeCode,
   getSupportedLanguages,
@@ -65,6 +66,14 @@ router.get(
   authMiddleware,
   roleMiddleware('faculty'),
   getCourseSubmissionsForFaculty
+);
+
+// Faculty gets summary of all submissions across their courses
+router.get(
+  '/faculty/summary',
+  authMiddleware,
+  roleMiddleware('faculty'),
+  getFacultySummary
 );
 
 // Student can see their own submissions
