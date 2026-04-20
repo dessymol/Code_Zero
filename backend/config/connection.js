@@ -8,7 +8,8 @@ const sequelize = new Sequelize(
   process.env.DB_PASSWORD,
   {
     host: process.env.DB_HOST,
-    port: Number(process.env.MYSQL_PORT || 3306),
+    // Support both DB_PORT and MYSQL_PORT so existing local .env files work.
+    port: Number(process.env.DB_PORT || process.env.MYSQL_PORT || 3306),
     dialect: 'mysql',
     // logging: (msg) => logger.debug(msg),
     logging: false,
