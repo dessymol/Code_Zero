@@ -462,219 +462,187 @@ exports.submitCode = async (req, res) => {
       //   });
       // }
       // ─────────────────────────────────────────────────────────────
-
-      // Return Judge0 result along with submission data
-      return res.status(action === 'created' ? 201 : 200).json({
-        submission,
-        score: awarded_score,
-        action,
-        judgeResult: {
-          token: judgeResult.token,
-          status: judgeResult.status,
-          stdout: judgeResult.stdout,
-          stderr: judgeResult.stderr,
-          compile_output: judgeResult.compile_output,
-          time: judgeResult.time,
-          memory: judgeResult.memory
-        }
-      });
-    } catch (err) {
-      try { await t.rollback(); } catch (e) { console.warn('rollback failed', e); }
-      console.error('submit error', err);
-      return res.status(500).json({ message: 'Could not save submission', error: err.message || String(err) });
     }
-  };
 
-  /**
-   * NEW: Get supported programming languages from Judge0
-   */
-  exports.getSupportedLanguages = async (req, res) => {
-    try {
-      const languages = await judge0Service.getLanguages();
+    // Return Judge0 result along with submission data
+    return res.status(action === 'created' ? 201 : 200).json({
+      submission,
+      score: awarded_score,
+      action,
+      judgeResult: {
+        token: judgeResult.token,
+        status: judgeResult.status,
+        stdout: judgeResult.stdout,
+        stderr: judgeResult.stderr,
+        compile_output: judgeResult.compile_output,
+        time: judgeResult.time,
+        memory: judgeResult.memory
+      }
+    });
+  } catch (err) {
+    try { await t.rollback(); } catch (e) { console.warn('rollback failed', e); }
+    console.error('submit error', err);
+    return res.status(500).json({ message: 'Could not save submission', error: err.message || String(err) });
+  }
+};
 
-      // Transform to simpler format for frontend
-      const formattedLanguages = languages.map(lang => ({
-        id: lang.id,
-        name: lang.name,
-        value: lang.name.toLowerCase().replace(/[^a-z0-9]/g, '_'),
-        display: lang.name
-      }));
+/**
+ * NEW: Get supported programming languages from Judge0
+ */
+exports.getSupportedLanguages = async (req, res) => {
+  try {
+    const languages = await judge0Service.getLanguages();
 
-      return res.status(200).json({
-        success: true,
-        languages: formattedLanguages
-      });
-    } catch (error) {
-      console.error('Get languages error:', error);
-      return res.status(500).json({
+    // Transform to simpler format for frontend
+    const formattedLanguages = languages.map(lang => ({
+      id: lang.id,
+      name: lang.name,
+      value: lang.name.toLowerCase().replace(/[^a-z0-9]/g, '_'),
+      display: lang.name
+    }));
+
+    return res.status(200).json({
+      success: true,
+      languages: formattedLanguages
+    });
+  } catch (error) {
+    console.error('Get languages error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch languages',
+      languages: [
+        { id: 71, name: 'Python 3.8.1', value: 'python', display: 'Python' },
+        { id: 63, name: 'JavaScript (Node.js 12.14.0)', value: 'javascript', display: 'JavaScript' },
+        { id: 62, name: 'Java (OpenJDK 13.0.1)', value: 'java', display: 'Java' },
+        { id: 50, name: 'C (GCC 9.2.0)', value: 'c', display: 'C' },
+        { id: 54, name: 'C++ (GCC 9.2.0)', value: 'cpp', display: 'C++' }
+      ]
+    });
+  }
+};
+
+/**
+ * NEW: Get submission status from Judge0
+ */
+exports.getSubmissionStatus = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    if (!token) {
+      return res.status(400).json({
         success: false,
-        message: 'Failed to fetch languages',
-        languages: [
-          { id: 71, name: 'Python 3.8.1', value: 'python', display: 'Python' },
-          { id: 63, name: 'JavaScript (Node.js 12.14.0)', value: 'javascript', display: 'JavaScript' },
-          { id: 62, name: 'Java (OpenJDK 13.0.1)', value: 'java', display: 'Java' },
-          { id: 50, name: 'C (GCC 9.2.0)', value: 'c', display: 'C' },
-          { id: 54, name: 'C++ (GCC 9.2.0)', value: 'cpp', display: 'C++' }
-        ]
+        message: 'Submission token is required'
       });
     }
-  };
 
-  /**
-   * NEW: Get submission status from Judge0
-   */
-  exports.getSubmissionStatus = async (req, res) => {
-    try {
-      const { token } = req.params;
+    const result = await judge0Service.getSubmission(token);
 
-      if (!token) {
-        return res.status(400).json({
-          success: false,
-          message: 'Submission token is required'
-        });
-      }
-
-      const result = await judge0Service.getSubmission(token);
-
-      return res.status(200).json({
-        success: true,
-        data: result
-      });
-    } catch (error) {
-      console.error('Get submission status error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to get submission status',
-        error: error.message
-      });
-    }
-  };
+    return res.status(200).json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    console.error('Get submission status error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to get submission status',
+      error: error.message
+    });
+  }
+};
 
 
 
 
-  /**
-   * Get unique course IDs a student has submissions for.
-   */
-  exports.getCompletedCourses = async (req, res) => {
-    try {
-      const studentId = req.user && req.user.id;
-      if (!studentId) return res.status(401).json({ message: 'Unauthorized' });
+/**
+ * Get unique course IDs a student has submissions for.
+ */
+exports.getCompletedCourses = async (req, res) => {
+  try {
+    const studentId = req.user && req.user.id;
+    if (!studentId) return res.status(401).json({ message: 'Unauthorized' });
 
-      const submissions = await Submission.findAll({
-        where: { student_id: studentId },
-        include: [{ model: Question, attributes: ['course_id'] }],
-        attributes: ['id']
-      });
+    const submissions = await Submission.findAll({
+      where: { student_id: studentId },
+      include: [{ model: Question, attributes: ['course_id'] }],
+      attributes: ['id']
+    });
 
-      const courseIds = [...new Set(submissions.map(s => s.Question?.course_id).filter(Boolean))];
-      return res.status(200).json({ courses: courseIds });
-    } catch (err) {
-      console.error('getCompletedCourses error:', err);
-      return res.status(500).json({ message: 'Could not fetch completed courses', error: err.message });
-    }
-  };
+    const courseIds = [...new Set(submissions.map(s => s.Question?.course_id).filter(Boolean))];
+    return res.status(200).json({ courses: courseIds });
+  } catch (err) {
+    console.error('getCompletedCourses error:', err);
+    return res.status(500).json({ message: 'Could not fetch completed courses', error: err.message });
+  }
+};
 
-  /**
-   * Generic: get all submissions for a course (no batch grouping)
-   * Used by parts of UI that only need flattened list.
-   */
-  exports.getAllSubmissionsByCourse = async (req, res) => {
-    try {
-      const { courseId } = req.params;
-      if (!courseId) return res.status(400).json({ message: 'courseId required' });
+/**
+ * Generic: get all submissions for a course (no batch grouping)
+ * Used by parts of UI that only need flattened list.
+ */
+exports.getAllSubmissionsByCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    if (!courseId) return res.status(400).json({ message: 'courseId required' });
 
-      const submissions = await Submission.findAll({
-        include: [
-          {
-            model: Question,
-            where: { course_id: courseId },
-            attributes: []
-          },
-          {
-            model: Student,
-            attributes: ['id', 'name', 'email'],
-            include: [{ model: Batch, attributes: ['id', 'name', 'code'] }]
-          }
-        ],
-        order: [['createdAt', 'DESC']]
-      });
-
-      const submissionData = submissions.map(sub => ({
-        id: sub.id,
-        student_id: sub.student_id,
-        student_name: sub.Student?.name || null,
-        student_email: sub.Student?.email || null,
-        student_batches: (sub.Student?.Batches || []).map(b => ({ id: b.id, name: b.name, code: b.code })),
-        question_id: sub.question_id,
-        code: sub.code,
-        language_id: sub.language_id,
-        status: sub.status,
-        output: sub.output,
-        execution_time: sub.execution_time,
-        score: sub.score,
-        createdAt: sub.createdAt
-      }));
-
-      return res.status(200).json({ submissions: submissionData });
-    } catch (error) {
-      console.error('getAllSubmissionsByCourse error:', error);
-      return res.status(500).json({ message: 'Failed to fetch submissions', error: error.message });
-    }
-  };
-
-
-  exports.getQuestionsForStudentCourse = async (req, res) => {
-    try {
-      const { courseId } = req.params;
-      if (!courseId) {
-        return res.status(400).json({ message: 'courseId is required' });
-      }
-
-      // Fetch all questions for the course
-      const questions = await Question.findAll({
-        where: { course_id: courseId },
-        order: [['createdAt', 'DESC']],
-        // include associations if you need them (e.g., QuestionBatch) — keep minimal for performance
-      });
-
-      // If no authenticated student, return all questions (backwards-compatible)
-      const studentId = req.user && req.user.id;
-      if (!studentId) {
-        const normalized = questions.map(q => {
-          const plain = q.get ? q.get({ plain: true }) : q;
-          return {
-            ...plain,
-            language_id: plain.language_id ?? null,
-            score: plain.score ?? null,
-          };
-        });
-        return res.status(200).json({ questions: normalized, count: normalized.length });
-      }
-
-      // Collect question IDs for this course
-      const questionIds = questions.map(q => q.id).filter(Boolean);
-      if (questionIds.length === 0) {
-        return res.status(200).json({ questions: [], count: 0 });
-      }
-
-      // Find distinct question_ids the student has submitted for (any submission)
-      const submitted = await Submission.findAll({
-        where: {
-          student_id: studentId,
-          question_id: { [Op.in]: questionIds }
+    const submissions = await Submission.findAll({
+      include: [
+        {
+          model: Question,
+          where: { course_id: courseId },
+          attributes: []
         },
-        attributes: ['question_id'],
-        group: ['question_id']
-      });
+        {
+          model: Student,
+          attributes: ['id', 'name', 'email'],
+          include: [{ model: Batch, attributes: ['id', 'name', 'code'] }]
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
 
-      const submittedIds = submitted.map(s => s.question_id).filter(Boolean);
+    const submissionData = submissions.map(sub => ({
+      id: sub.id,
+      student_id: sub.student_id,
+      student_name: sub.Student?.name || null,
+      student_email: sub.Student?.email || null,
+      student_batches: (sub.Student?.Batches || []).map(b => ({ id: b.id, name: b.name, code: b.code })),
+      question_id: sub.question_id,
+      code: sub.code,
+      language_id: sub.language_id,
+      status: sub.status,
+      output: sub.output,
+      execution_time: sub.execution_time,
+      score: sub.score,
+      createdAt: sub.createdAt
+    }));
 
-      // Filter out submitted questions
-      const remaining = questions.filter(q => !submittedIds.includes(q.id));
+    return res.status(200).json({ submissions: submissionData });
+  } catch (error) {
+    console.error('getAllSubmissionsByCourse error:', error);
+    return res.status(500).json({ message: 'Failed to fetch submissions', error: error.message });
+  }
+};
 
-      // Normalize shape for frontend consumption
-      const normalized = remaining.map(q => {
+
+exports.getQuestionsForStudentCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    if (!courseId) {
+      return res.status(400).json({ message: 'courseId is required' });
+    }
+
+    // Fetch all questions for the course
+    const questions = await Question.findAll({
+      where: { course_id: courseId },
+      order: [['createdAt', 'DESC']],
+      // include associations if you need them (e.g., QuestionBatch) — keep minimal for performance
+    });
+
+    // If no authenticated student, return all questions (backwards-compatible)
+    const studentId = req.user && req.user.id;
+    if (!studentId) {
+      const normalized = questions.map(q => {
         const plain = q.get ? q.get({ plain: true }) : q;
         return {
           ...plain,
@@ -682,198 +650,151 @@ exports.submitCode = async (req, res) => {
           score: plain.score ?? null,
         };
       });
-
       return res.status(200).json({ questions: normalized, count: normalized.length });
-    } catch (err) {
-      console.error('getQuestionsForStudentCourse error:', err);
-      return res.status(500).json({ message: 'Could not fetch questions', error: err.message || String(err) });
     }
-  };
 
+    // Collect question IDs for this course
+    const questionIds = questions.map(q => q.id).filter(Boolean);
+    if (questionIds.length === 0) {
+      return res.status(200).json({ questions: [], count: 0 });
+    }
 
-  /**
-   * ADMIN: get course submissions with optional batch filter (batchId or batchCode).
-   * - If batchId/batchCode provided: return only submissions whose student belongs to that batch.
-   * - If no batch filter provided: return all submissions for the course (backwards-compatible).
-   */
-  exports.getCourseSubmissionsForAdmin = async (req, res) => {
-    try {
-      const { courseId } = req.params;
-      const { batchId, batchCode } = req.query;
+    // Find distinct question_ids the student has submitted for (any submission)
+    const submitted = await Submission.findAll({
+      where: {
+        student_id: studentId,
+        question_id: { [Op.in]: questionIds }
+      },
+      attributes: ['question_id'],
+      group: ['question_id']
+    });
 
-      if (!courseId) {
-        return res.status(400).json({ success: false, message: 'courseId is required' });
-      }
+    const submittedIds = submitted.map(s => s.question_id).filter(Boolean);
 
-      // Ensure course exists
-      const course = await require('../models').Course.findByPk(courseId, {
-        attributes: ['id', 'name', 'course_code']
-      });
-      if (!course) return res.status(404).json({ success: false, message: 'Course not found' });
+    // Filter out submitted questions
+    const remaining = questions.filter(q => !submittedIds.includes(q.id));
 
-      // Batch filter logic (by id or code)
-      let batchFilterObj = {};
-      if (batchId) batchFilterObj.id = batchId;
-      if (batchCode) batchFilterObj.code = batchCode;
-
-      let studentInclude = {
-        model: require('../models').Student,
-        attributes: ['id', 'name', 'email'],
-        include: [{
-          model: require('../models').Batch,
-          attributes: ['id', 'name', 'code'],
-          ...(batchId || batchCode ? { where: batchFilterObj } : {})
-        }]
+    // Normalize shape for frontend consumption
+    const normalized = remaining.map(q => {
+      const plain = q.get ? q.get({ plain: true }) : q;
+      return {
+        ...plain,
+        language_id: plain.language_id ?? null,
+        score: plain.score ?? null,
       };
+    });
 
-      // Only include students that are a member of the specified batch
-      let submissionWhere = {};
-      let include = [
-        {
-          model: require('../models').Question,
-          attributes: ['id', 'title', 'course_id'],
-          where: { course_id: courseId },
-          include: [{ model: require('../models').Course, attributes: ['id', 'name', 'course_code'] }]
-        },
-        studentInclude
-      ];
+    return res.status(200).json({ questions: normalized, count: normalized.length });
+  } catch (err) {
+    console.error('getQuestionsForStudentCourse error:', err);
+    return res.status(500).json({ message: 'Could not fetch questions', error: err.message || String(err) });
+  }
+};
 
-      let submissions = await require('../models').Submission.findAll({
-        include,
-        order: [['createdAt', 'DESC']]
-      });
 
-      // If filtering by batch, only keep submissions where the student is a member of the batch
-      if (batchId || batchCode) {
-        submissions = submissions.filter(sub => {
-          const studentBatches = (sub.Student.Batches || []);
-          // There must be at least one batch matching the filter
-          return studentBatches.some(
-            b =>
-              (batchId && Number(b.id) === Number(batchId)) ||
-              (batchCode && b.code === batchCode)
-          );
-        });
-      }
+/**
+ * ADMIN: get course submissions with optional batch filter (batchId or batchCode).
+ * - If batchId/batchCode provided: return only submissions whose student belongs to that batch.
+ * - If no batch filter provided: return all submissions for the course (backwards-compatible).
+ */
+exports.getCourseSubmissionsForAdmin = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { batchId, batchCode } = req.query;
 
-      const submissionData = submissions.map(s => ({
-        id: s.id,
-        student_id: s.student_id,
-        student_name: s.Student?.name || null,
-        student_email: s.Student?.email || null,
-        student_batches: (s.Student?.Batches || []).map(b => ({ id: b.id, name: b.name, code: b.code })),
-        question_id: s.question_id,
-        question_title: s.Question?.title || null,
-        code: s.code,
-        language_id: s.language_id,
-        status: s.status,
-        output: s.output,
-        execution_time: s.execution_time,
-        score: s.score,
-        createdAt: s.createdAt
-      }));
+    if (!courseId) {
+      return res.status(400).json({ success: false, message: 'courseId is required' });
+    }
 
-      return res.status(200).json({ success: true, course, submissions: submissionData });
-    } catch (error) {
-      console.error('Error fetching submissions (admin by course):', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Error fetching submissions',
-        error: error.message
+    // Ensure course exists
+    const course = await require('../models').Course.findByPk(courseId, {
+      attributes: ['id', 'name', 'course_code']
+    });
+    if (!course) return res.status(404).json({ success: false, message: 'Course not found' });
+
+    // Batch filter logic (by id or code)
+    let batchFilterObj = {};
+    if (batchId) batchFilterObj.id = batchId;
+    if (batchCode) batchFilterObj.code = batchCode;
+
+    let studentInclude = {
+      model: require('../models').Student,
+      attributes: ['id', 'name', 'email'],
+      include: [{
+        model: require('../models').Batch,
+        attributes: ['id', 'name', 'code'],
+        ...(batchId || batchCode ? { where: batchFilterObj } : {})
+      }]
+    };
+
+    // Only include students that are a member of the specified batch
+    let submissionWhere = {};
+    let include = [
+      {
+        model: require('../models').Question,
+        attributes: ['id', 'title', 'course_id'],
+        where: { course_id: courseId },
+        include: [{ model: require('../models').Course, attributes: ['id', 'name', 'course_code'] }]
+      },
+      studentInclude
+    ];
+
+    let submissions = await require('../models').Submission.findAll({
+      include,
+      order: [['createdAt', 'DESC']]
+    });
+
+    // If filtering by batch, only keep submissions where the student is a member of the batch
+    if (batchId || batchCode) {
+      submissions = submissions.filter(sub => {
+        const studentBatches = (sub.Student.Batches || []);
+        // There must be at least one batch matching the filter
+        return studentBatches.some(
+          b =>
+            (batchId && Number(b.id) === Number(batchId)) ||
+            (batchCode && b.code === batchCode)
+        );
       });
     }
-  };
+
+    const submissionData = submissions.map(s => ({
+      id: s.id,
+      student_id: s.student_id,
+      student_name: s.Student?.name || null,
+      student_email: s.Student?.email || null,
+      student_batches: (s.Student?.Batches || []).map(b => ({ id: b.id, name: b.name, code: b.code })),
+      question_id: s.question_id,
+      question_title: s.Question?.title || null,
+      code: s.code,
+      language_id: s.language_id,
+      status: s.status,
+      output: s.output,
+      execution_time: s.execution_time,
+      score: s.score,
+      createdAt: s.createdAt
+    }));
+
+    return res.status(200).json({ success: true, course, submissions: submissionData });
+  } catch (error) {
+    console.error('Error fetching submissions (admin by course):', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching submissions',
+      error: error.message
+    });
+  }
+};
 
 
 
-  exports.getSubmissionsByCourseAndBatch = async (req, res) => {
-    try {
-      const { courseId, batchId } = req.params;
-      if (!courseId || !batchId) return res.status(400).json({ success: false, message: 'courseId and batchId are required' });
+exports.getSubmissionsByCourseAndBatch = async (req, res) => {
+  try {
+    const { courseId, batchId } = req.params;
+    if (!courseId || !batchId) return res.status(400).json({ success: false, message: 'courseId and batchId are required' });
 
-      // Inner join student->batch with a where clause ensures only students in batchId will be returned
-      const submissions = await Submission.findAll({
-        include: [
-          {
-            model: Question,
-            attributes: ['id', 'title', 'course_id'],
-            where: { course_id: courseId },
-            include: [{ model: Course, attributes: ['id', 'name', 'course_code'] }]
-          },
-          {
-            model: Student,
-            attributes: ['id', 'name', 'email'],
-            include: [{
-              model: Batch,
-              attributes: ['id', 'name', 'code'],
-              where: { id: batchId } // THIS enforces the student being in the given batch
-            }]
-          }
-        ],
-        order: [['createdAt', 'DESC']]
-      });
-
-      const submissionData = submissions.map(s => ({
-        id: s.id,
-        student_id: s.student_id,
-        student_name: s.Student?.name || null,
-        student_email: s.Student?.email || null,
-        student_batches: (s.Student?.Batches || []).map(b => ({ id: b.id, name: b.name, code: b.code })),
-        question_id: s.question_id,
-        question_title: s.Question?.title || null,
-        code: s.code,
-        language_id: s.language_id,
-        status: s.status,
-        output: s.output,
-        execution_time: s.execution_time,
-        score: s.score,
-        createdAt: s.createdAt
-      }));
-
-      return res.status(200).json({ success: true, submissions: submissionData });
-    } catch (error) {
-      console.error('getSubmissionsByCourseAndBatch error:', error);
-      return res.status(500).json({ success: false, message: 'Error fetching submissions', error: error.message });
-    }
-  };
-
-
-
-  /**
-   * Faculty view for course submissions:
-   * - Faculty must be assigned to course (attempts to validate).
-   * - Optional batch filter (query param batchId) restricts to students in that batch.
-   */
-  exports.getCourseSubmissionsForFaculty = async (req, res) => {
-    try {
-      const facultyId = req.user && req.user.id;
-      const { courseId } = req.params;
-      const { batchId } = req.query; // optional
-
-      if (!facultyId) return res.status(401).json({ success: false, message: 'Unauthorized' });
-      if (!courseId) return res.status(400).json({ success: false, message: 'courseId required' });
-
-      const course = await Course.findByPk(courseId, { attributes: ['id', 'name', 'course_code'] });
-      if (!course) return res.status(404).json({ success: false, message: 'Course not found' });
-
-      // Optional: check faculty assignment to this course
-      let assigned = true;
-      try {
-        if (typeof course.hasFaculty === 'function') {
-          assigned = await course.hasFaculty(facultyId);
-        } else if (typeof course.getFaculties === 'function') {
-          const facs = await course.getFaculties({ where: { id: facultyId } });
-          assigned = facs && facs.length > 0;
-        }
-      } catch (e) {
-        assigned = true;
-      }
-      if (!assigned) {
-        return res.status(403).json({ success: false, message: 'You are not assigned to this course' });
-      }
-      
-      // Build includes
-      const include = [
+    // Inner join student->batch with a where clause ensures only students in batchId will be returned
+    const submissions = await Submission.findAll({
+      include: [
         {
           model: Question,
           attributes: ['id', 'title', 'course_id'],
@@ -883,191 +804,272 @@ exports.submitCode = async (req, res) => {
         {
           model: Student,
           attributes: ['id', 'name', 'email'],
-          include: [
-            {
-              model: Batch,
-              attributes: ['id', 'name', 'code'],
-              ...(batchId ? { where: { id: batchId }, required: true } : {})
-            }
-          ]
+          include: [{
+            model: Batch,
+            attributes: ['id', 'name', 'code'],
+            where: { id: batchId } // THIS enforces the student being in the given batch
+          }]
         }
-      ];
+      ],
+      order: [['createdAt', 'DESC']]
+    });
 
-      const submissions = await Submission.findAll({
-        include,
-        order: [['createdAt', 'DESC']]
-      });
+    const submissionData = submissions.map(s => ({
+      id: s.id,
+      student_id: s.student_id,
+      student_name: s.Student?.name || null,
+      student_email: s.Student?.email || null,
+      student_batches: (s.Student?.Batches || []).map(b => ({ id: b.id, name: b.name, code: b.code })),
+      question_id: s.question_id,
+      question_title: s.Question?.title || null,
+      code: s.code,
+      language_id: s.language_id,
+      status: s.status,
+      output: s.output,
+      execution_time: s.execution_time,
+      score: s.score,
+      createdAt: s.createdAt
+    }));
 
-      // Map clean data
-      const submissionData = submissions.map((s) => ({
-        id: s.id,
-        student_id: s.student_id,
-        student_name: s.Student?.name || null,
-        student_email: s.Student?.email || null,
-        student_batches: (s.Student?.Batches || []).map(b => ({
-          id: b.id,
-          name: b.name,
-          code: b.code
-        })),
-        question_id: s.question_id,
-        question_title: s.Question?.title || null,
-        code: s.code,
-        language_id: s.language_id,
-        status: s.status,
-        output: s.output,
-        execution_time: s.execution_time,
-        score: s.score,
-        createdAt: s.createdAt
-      }));
-
-      return res.status(200).json({ success: true, course, submissions: submissionData });
-    } catch (error) {
-      console.error('Error fetching submissions (faculty by course):', error);
-      return res.status(500).json({ success: false, message: 'Error fetching submissions', error: error.message });
-    }
-  };
+    return res.status(200).json({ success: true, submissions: submissionData });
+  } catch (error) {
+    console.error('getSubmissionsByCourseAndBatch error:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching submissions', error: error.message });
+  }
+};
 
 
-  exports.getMySubmissions = async (req, res) => {
+
+/**
+ * Faculty view for course submissions:
+ * - Faculty must be assigned to course (attempts to validate).
+ * - Optional batch filter (query param batchId) restricts to students in that batch.
+ */
+exports.getCourseSubmissionsForFaculty = async (req, res) => {
+  try {
+    const facultyId = req.user && req.user.id;
+    const { courseId } = req.params;
+    const { batchId } = req.query; // optional
+
+    if (!facultyId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    if (!courseId) return res.status(400).json({ success: false, message: 'courseId required' });
+
+    const course = await Course.findByPk(courseId, { attributes: ['id', 'name', 'course_code'] });
+    if (!course) return res.status(404).json({ success: false, message: 'Course not found' });
+
+    // Optional: check faculty assignment to this course
+    let assigned = true;
     try {
-      const studentId = req.user && req.user.id;
-      if (!studentId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+      if (typeof course.hasFaculty === 'function') {
+        assigned = await course.hasFaculty(facultyId);
+      } else if (typeof course.getFaculties === 'function') {
+        const facs = await course.getFaculties({ where: { id: facultyId } });
+        assigned = facs && facs.length > 0;
+      }
+    } catch (e) {
+      assigned = true;
+    }
+    if (!assigned) {
+      return res.status(403).json({ success: false, message: 'You are not assigned to this course' });
+    }
 
-      const subs = await Submission.findAll({
-        where: { student_id: studentId },
+    // Build includes
+    const include = [
+      {
+        model: Question,
+        attributes: ['id', 'title', 'course_id'],
+        where: { course_id: courseId },
+        include: [{ model: Course, attributes: ['id', 'name', 'course_code'] }]
+      },
+      {
+        model: Student,
+        attributes: ['id', 'name', 'email'],
         include: [
           {
-            model: Question,
-            attributes: ['id', 'title', 'course_id'],
-            include: [{ model: Course, attributes: ['id', 'name', 'course_code'] }]
-          },
-          {
-            model: Student,
-            attributes: ['id', 'name', 'email'],
-            include: [{ model: Batch, attributes: ['id', 'name', 'code'] }]
+            model: Batch,
+            attributes: ['id', 'name', 'code'],
+            ...(batchId ? { where: { id: batchId }, required: true } : {})
           }
-        ],
-        order: [['createdAt', 'DESC']],
-        limit: 200
-      });
-
-      const data = subs.map(s => ({
-        id: s.id,
-        question_id: s.question_id,
-        question_title: s.Question?.title || null,
-        course: s.Question?.Course ? { id: s.Question.Course.id, name: s.Question.Course.name, code: s.Question.Course.course_code || s.Question.Course.code } : null,
-        status: s.status,
-        score: s.score,
-        createdAt: s.createdAt,
-        student_batches: (s.Student?.Batches || []).map(b => ({ id: b.id, name: b.name, code: b.code }))
-      }));
-
-      return res.status(200).json({ success: true, submissions: data });
-    } catch (err) {
-      console.error('getMySubmissions error', err);
-      return res.status(500).json({ success: false, message: 'Failed to fetch submissions', error: err.message });
-    }
-  };
-
-  /**
-   * GET /api/submissions/faculty/summary
-   * Returns a summary of all submissions for courses taught by the faculty member.
-   * Includes stats like total submissions, average scores, completion status by course.
-   */
-  exports.getFacultySummary = async (req, res) => {
-    try {
-      const facultyId = req.user && req.user.id;
-      if (!facultyId) return res.status(401).json({ success: false, message: 'Unauthorized' });
-
-      // Find all courses assigned to this faculty member
-      const assignedCourses = await Course.findAll({
-        include: [{
-          model: User,
-          where: { id: facultyId },
-          attributes: [],
-          through: { attributes: [] }
-        }],
-        attributes: ['id', 'name', 'course_code']
-      });
-
-      if (!assignedCourses || assignedCourses.length === 0) {
-        return res.status(200).json({
-          success: true,
-          summary: {
-            totalCourses: 0,
-            totalSubmissions: 0,
-            averageScore: 0,
-            courseStats: []
-          }
-        });
+        ]
       }
+    ];
 
-      const courseIds = assignedCourses.map(c => c.id);
+    const submissions = await Submission.findAll({
+      include,
+      order: [['createdAt', 'DESC']]
+    });
 
-      // Get all submissions for these courses
-      const submissions = await Submission.findAll({
-        include: [{
+    // Map clean data
+    const submissionData = submissions.map((s) => ({
+      id: s.id,
+      student_id: s.student_id,
+      student_name: s.Student?.name || null,
+      student_email: s.Student?.email || null,
+      student_batches: (s.Student?.Batches || []).map(b => ({
+        id: b.id,
+        name: b.name,
+        code: b.code
+      })),
+      question_id: s.question_id,
+      question_title: s.Question?.title || null,
+      code: s.code,
+      language_id: s.language_id,
+      status: s.status,
+      output: s.output,
+      execution_time: s.execution_time,
+      score: s.score,
+      createdAt: s.createdAt
+    }));
+
+    return res.status(200).json({ success: true, course, submissions: submissionData });
+  } catch (error) {
+    console.error('Error fetching submissions (faculty by course):', error);
+    return res.status(500).json({ success: false, message: 'Error fetching submissions', error: error.message });
+  }
+};
+
+
+exports.getMySubmissions = async (req, res) => {
+  try {
+    const studentId = req.user && req.user.id;
+    if (!studentId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const subs = await Submission.findAll({
+      where: { student_id: studentId },
+      include: [
+        {
           model: Question,
-          attributes: ['id', 'course_id', 'score'],
-          where: { course_id: { [db.Op.in]: courseIds } }
-        }],
-        attributes: ['id', 'score', 'status', 'createdAt']
-      });
-
-      // Calculate statistics
-      let totalSubmissions = submissions.length;
-      let totalScore = 0;
-      let completedCount = 0;
-
-      submissions.forEach(sub => {
-        if (sub.score !== null) {
-          totalScore += Number(sub.score) || 0;
-          completedCount++;
+          attributes: ['id', 'title', 'course_id'],
+          include: [{ model: Course, attributes: ['id', 'name', 'course_code'] }]
+        },
+        {
+          model: Student,
+          attributes: ['id', 'name', 'email'],
+          include: [{ model: Batch, attributes: ['id', 'name', 'code'] }]
         }
-      });
+      ],
+      order: [['createdAt', 'DESC']],
+      limit: 200
+    });
 
-      const averageScore = totalSubmissions > 0 && completedCount > 0
-        ? (totalScore / completedCount).toFixed(2)
-        : 0;
+    const data = subs.map(s => ({
+      id: s.id,
+      question_id: s.question_id,
+      question_title: s.Question?.title || null,
+      course: s.Question?.Course ? { id: s.Question.Course.id, name: s.Question.Course.name, code: s.Question.Course.course_code || s.Question.Course.code } : null,
+      status: s.status,
+      score: s.score,
+      createdAt: s.createdAt,
+      student_batches: (s.Student?.Batches || []).map(b => ({ id: b.id, name: b.name, code: b.code }))
+    }));
 
-      // Breakdown by course
-      const courseStats = assignedCourses.map(course => {
-        const courseSubmissions = submissions.filter(
-          sub => sub.Question && sub.Question.course_id === course.id
-        );
+    return res.status(200).json({ success: true, submissions: data });
+  } catch (err) {
+    console.error('getMySubmissions error', err);
+    return res.status(500).json({ success: false, message: 'Failed to fetch submissions', error: err.message });
+  }
+};
 
-        let courseScore = 0;
-        let courseCompletedCount = 0;
-        courseSubmissions.forEach(sub => {
-          if (sub.score !== null) {
-            courseScore += Number(sub.score) || 0;
-            courseCompletedCount++;
-          }
-        });
+/**
+ * GET /api/submissions/faculty/summary
+ * Returns a summary of all submissions for courses taught by the faculty member.
+ * Includes stats like total submissions, average scores, completion status by course.
+ */
+exports.getFacultySummary = async (req, res) => {
+  try {
+    const facultyId = req.user && req.user.id;
+    if (!facultyId) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
-        return {
-          id: course.id,
-          name: course.name,
-          code: course.course_code,
-          totalSubmissions: courseSubmissions.length,
-          completedSubmissions: courseCompletedCount,
-          averageScore: courseCompletedCount > 0
-            ? (courseScore / courseCompletedCount).toFixed(2)
-            : 0
-        };
-      });
+    // Find all courses assigned to this faculty member
+    const assignedCourses = await Course.findAll({
+      include: [{
+        model: User,
+        as: 'Faculties',
+        where: { id: facultyId },
+        attributes: [],
+        through: { attributes: [] }
+      }],
+      attributes: ['id', 'name', 'course_code']
+    });
 
+    if (!assignedCourses || assignedCourses.length === 0) {
       return res.status(200).json({
         success: true,
         summary: {
-          totalCourses: assignedCourses.length,
-          totalSubmissions,
-          averageScore: Number(averageScore),
-          courseStats
+          totalCourses: 0,
+          totalSubmissions: 0,
+          averageScore: 0,
+          courseStats: []
         }
       });
-    } catch (error) {
-      console.error('getFacultySummary error:', error);
-      return res.status(500).json({ success: false, message: 'Error fetching summary', error: error.message });
     }
-  };
+
+    const courseIds = assignedCourses.map(c => c.id);
+
+    // Get all submissions for these courses
+    const submissions = await Submission.findAll({
+      include: [{
+        model: Question,
+        attributes: ['id', 'course_id', 'score'],
+        where: { course_id: { [db.Op.in]: courseIds } }
+      }],
+      attributes: ['id', 'score', 'status', 'createdAt']
+    });
+
+    // Calculate statistics
+    let totalSubmissions = submissions.length;
+    let totalScore = 0;
+    let completedCount = 0;
+
+    submissions.forEach(sub => {
+      if (sub.score !== null) {
+        totalScore += Number(sub.score) || 0;
+        completedCount++;
+      }
+    });
+
+    const averageScore = totalSubmissions > 0 && completedCount > 0
+      ? (totalScore / completedCount).toFixed(2)
+      : 0;
+
+    // Breakdown by course
+    const courseStats = assignedCourses.map(course => {
+      const courseSubmissions = submissions.filter(
+        sub => sub.Question && sub.Question.course_id === course.id
+      );
+
+      let courseScore = 0;
+      let courseCompletedCount = 0;
+      courseSubmissions.forEach(sub => {
+        if (sub.score !== null) {
+          courseScore += Number(sub.score) || 0;
+          courseCompletedCount++;
+        }
+      });
+
+      return {
+        id: course.id,
+        name: course.name,
+        code: course.course_code,
+        totalSubmissions: courseSubmissions.length,
+        completedSubmissions: courseCompletedCount,
+        averageScore: courseCompletedCount > 0
+          ? (courseScore / courseCompletedCount).toFixed(2)
+          : 0
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      summary: {
+        totalCourses: assignedCourses.length,
+        totalSubmissions,
+        averageScore: Number(averageScore),
+        courseStats
+      }
+    });
+  } catch (error) {
+    console.error('getFacultySummary error:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching summary', error: error.message });
+  }
+};

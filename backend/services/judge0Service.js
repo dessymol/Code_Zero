@@ -109,8 +109,9 @@ class Judge0Service {
         stack_limit: 64000
       }, {
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
+        params: { base64_encoded: 'false' },
         timeout: 10000 // 10 second timeout for submission creation
       });
 
@@ -138,6 +139,7 @@ class Judge0Service {
 
         try {
           const resultResponse = await this.client.get(`/submissions/${token}`, {
+            params: { base64_encoded: 'false' },
             timeout: 5000
           });
 
@@ -233,7 +235,9 @@ class Judge0Service {
    */
   async getSubmission(token) {
     try {
-      const response = await this.client.get(`/submissions/${token}`);
+      const response = await this.client.get(`/submissions/${token}`, {
+        params: { base64_encoded: 'false' }
+      });
       return response.data;
     } catch (error) {
       console.error('Judge0 get submission error:', error.message);
