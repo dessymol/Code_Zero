@@ -4,6 +4,7 @@ module.exports = (sequelize, DataTypes) => {
         submission_id: {
             type: DataTypes.INTEGER,
             allowNull: false,
+            unique: true,
         },
         summary: {
             type: DataTypes.TEXT,

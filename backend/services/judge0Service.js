@@ -1,28 +1,44 @@
 const axios = require('axios');
+function normalizeOutput(s = '') {
+  return String(s || '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map(line => line.trim())
+    .join('\n')
+    .trim();
+}
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 class Judge0Service {
   constructor() {
     this.baseURL = process.env.JUDGE0_URL || 'http://localhost:2358';
     this.rapidApiKey = process.env.RAPIDAPI_KEY || null;
     this.rapidApiHost = process.env.RAPIDAPI_HOST || 'judge0-ce.p.rapidapi.com';
-    
+
+    // Debug logging
+    console.log('[Judge0Service] Initialized with:');
+    console.log('  - JUDGE0_URL:', this.baseURL);
+    console.log('  - Has RapidAPI Key:', !!this.rapidApiKey);
+    console.log('  - RapidAPI Host:', this.rapidApiHost);
+
     // Configure headers based on whether we're using RapidAPI or self-hosted
     const headers = {
       'Content-Type': 'application/json'
     };
-    
+
     // Add RapidAPI headers if using RapidAPI
     if (this.rapidApiKey && this.baseURL.includes('rapidapi.com')) {
       headers['X-RapidAPI-Key'] = this.rapidApiKey;
       headers['X-RapidAPI-Host'] = this.rapidApiHost;
     }
-    
+
     this.client = axios.create({
       baseURL: this.baseURL,
       timeout: 60000, // 60 seconds timeout for code execution
       headers: headers
     });
-    
+
     // Map of common language names to Judge0 language IDs
     this.languageMap = {
       'python': 71,      // Python 3.8.1
@@ -57,7 +73,7 @@ class Judge0Service {
     if (typeof language === 'number') {
       return language;
     }
-    
+
     const lang = String(language).toLowerCase().trim();
     return this.languageMap[lang] || 71; // Default to Python if not found
   }
@@ -81,7 +97,7 @@ class Judge0Service {
         stdinLength: stdin?.length || 0,
         wait
       });
-      
+
       // Create submission without wait parameter to avoid timeout issues
       const createResponse = await this.client.post('/submissions', {
         source_code: sourceCode,
@@ -97,21 +113,21 @@ class Judge0Service {
         },
         timeout: 10000 // 10 second timeout for submission creation
       });
-      
+
       const token = createResponse.data.token;
       console.log('[Judge0Service] Submission created with token:', token);
-      
+
       // If wait is false, return immediately with token
       if (!wait) {
         console.log('[Judge0Service] Returning immediately (wait=false)');
         return createResponse.data;
       }
-      
+
       // Poll for result with exponential backoff
       let result = null;
       let attempts = 0;
       const maxAttempts = 30; // 30 seconds max waiting
-      
+
       console.log('[Judge0Service] Starting to poll for result...');
       while (attempts < maxAttempts) {
         // Wait before polling (exponential backoff)
@@ -119,18 +135,18 @@ class Judge0Service {
           const delay = Math.min(1000 * (1 + attempts * 0.3), 2000);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
-        
+
         try {
           const resultResponse = await this.client.get(`/submissions/${token}`, {
             timeout: 5000
           });
-          
+
           result = resultResponse.data;
           const statusId = result.status?.id || result.status_id || 0;
           const statusDesc = result.status?.description || 'Unknown';
-          
+
           console.log(`[Judge0Service] Poll attempt ${attempts + 1}: Status ID=${statusId}, Description=${statusDesc}`);
-          
+
           // Check if processing is complete
           // Status IDs: 1 = In Queue, 2 = Processing, others = Complete/Error
           if (result.status && result.status.id !== 1 && result.status.id !== 2) {
@@ -146,15 +162,15 @@ class Judge0Service {
         } catch (pollError) {
           console.warn(`[Judge0Service] Error fetching result (attempt ${attempts + 1}):`, pollError.message);
         }
-        
+
         attempts++;
       }
-      
+
       if (!result) {
         console.error('[Judge0Service] Timeout waiting for result after', maxAttempts, 'attempts');
         throw new Error('Timeout waiting for Judge0 result');
       }
-      
+
       // Log final result
       if (result.status?.id === 13) {
         console.error('[Judge0Service] Internal Error received:', {
@@ -163,7 +179,7 @@ class Judge0Service {
           compile_output: result.compile_output
         });
       }
-      
+
       return result;
     } catch (error) {
       console.error('[Judge0Service] Submission error:', {
@@ -173,7 +189,7 @@ class Judge0Service {
         responseData: error.response?.data,
         stack: error.stack
       });
-      
+
       // Return a mock error response if Judge0 is down
       if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
         return {
@@ -189,7 +205,7 @@ class Judge0Service {
           memory: null
         };
       }
-      
+
       // If we got a response but it's an error, return it
       if (error.response && error.response.data) {
         return {
@@ -205,7 +221,7 @@ class Judge0Service {
           memory: null
         };
       }
-      
+
       throw error;
     }
   }
@@ -235,7 +251,7 @@ class Judge0Service {
       return response.data;
     } catch (error) {
       console.error('Judge0 get languages error:', error.message);
-      
+
       // Return a default list if Judge0 is down
       return [
         { id: 71, name: 'Python 3.8.1' },
@@ -260,6 +276,66 @@ class Judge0Service {
       return { message: 'Judge0 service unavailable' };
     }
   }
+  /**
+     * Run student code against a single testcase and return a normalised result.
+     * @param {string}        code       - Student source code
+     * @param {number}        languageId - Judge0 language ID
+     * @param {{ input: string, output: string, id: number }} testcase
+     * @returns {Promise<{
+     *   test_case_id: number,
+     *   passed: boolean,
+     *   actual_output: string,
+     *   expected_output: string,
+     *   execution_time: number|null,
+     *   memory_usage: number|null,
+     *   error_message: string|null,
+     *   status_id: number
+     * }>}
+     */
+  async runAgainstTestcase(code, languageId, testcase) {
+    const raw = await this.submitCode(
+      code,
+      languageId,
+      testcase.input || '',
+      testcase.output || '',
+      true  // wait = true
+    );
+
+    const statusId = raw.status?.id ?? 0;
+    const actualOut = normalizeOutput(raw.stdout || '');
+    const expectedOut = normalizeOutput(testcase.output || '');
+    const passed = statusId === 3 && actualOut === expectedOut;
+
+    return {
+      test_case_id: testcase.id,
+      passed,
+      actual_output: actualOut,
+      expected_output: expectedOut,
+      execution_time: raw.time != null ? parseFloat(raw.time) : null,
+      memory_usage: raw.memory != null ? parseInt(raw.memory, 10) : null,
+      error_message: raw.stderr || raw.compile_output || null,
+      status_id: statusId,
+    };
+  }
+
+  /**
+   * Run student code against every testcase sequentially.
+   * Sequential (not parallel) to avoid overwhelming a self-hosted Judge0 instance.
+   * @param {string}   code
+   * @param {number}   languageId
+   * @param {Array<{ id: number, input: string, output: string }>} testcases
+   * @returns {Promise<Array>}  Same shape as runAgainstTestcase, one entry per testcase
+   */
+  async runAgainstAllTestcases(code, languageId, testcases) {
+    const results = [];
+    for (const tc of testcases) {
+      // eslint-disable-next-line no-await-in-loop
+      const r = await this.runAgainstTestcase(code, languageId, tc);
+      results.push(r);
+    }
+    return results;
+  }
 }
 
 module.exports = new Judge0Service();
+module.exports.normalizeOutput = normalizeOutput;

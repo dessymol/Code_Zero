@@ -98,21 +98,37 @@ function buildFeedbackPrompt({ code, languageName, question, judgeResult, score,
     const stdout = judgeResult?.stdout || '';
     const stderr = judgeResult?.stderr || '';
     const compileErr = judgeResult?.compile_output || '';
-
+    const cap = (str, max) => String(str || '').slice(0, max);
+    const safeCode = cap(code, 3000);
+    const safeStdout = cap(stdout, 500);
+    const safeStderr = cap(stderr, 500);
+    const safeCompileErr = cap(compileErr, 500);
     return `You are a coding tutor reviewing a student's submission. Be concise and constructive.
- 
-Question: ${question.title}
+
+Question: ${cap(question.title, 120)}
 Language: ${languageName}
 Score achieved: ${score}/${maxScore}
 Judge status: ${status}
-Expected output: ${question.sample_output || 'None'}
-${compileErr ? `\nCompiler error:\n${compileErr}` : ''}
-${stderr ? `\nRuntime error:\n${stderr}` : ''}
-${stdout ? `\nOutput produced:\n${stdout}` : ''}
- 
+Expected output: ${cap(question.sample_output, 300) || 'None'}
+${safeCompileErr ? `\nCompiler error:\n${safeCompileErr}` : ''}
+${safeStderr ? `\nRuntime error:\n${safeStderr}` : ''}
+${safeStdout ? `\nOutput produced:\n${safeStdout}` : ''}
+${
+        // ADD ↓ — inject testcase summary when available
+        (arguments[0].testSummary)
+            ? `\nTest results: ${arguments[0].testSummary.passed} of ${arguments[0].testSummary.total} test cases passed.` +
+            (arguments[0].testSummary.failedExamples.length > 0
+                ? '\nFailed examples:\n' + arguments[0].testSummary.failedExamples
+                    .map((e, i) => `  ${i + 1}. Expected: ${e.expected} | Got: ${e.actual}`)
+                    .join('\n')
+                : '')
+            : ''
+        // ADD ↑
+        }
+
 Student code:
-${code}
- 
+${safeCode}
+
 Respond ONLY with this JSON object. No markdown, no explanation outside the JSON:
 {
   "summary": "One sentence verdict on the submission",
@@ -120,10 +136,32 @@ Respond ONLY with this JSON object. No markdown, no explanation outside the JSON
   "hint": "A nudge toward the fix without giving the full answer (null if correct)",
   "positive": "One thing the student did well in their code"
 }`;
+    //     return `You are a coding tutor reviewing a student's submission. Be concise and constructive.
+
+    // Question: ${question.title}
+    // Language: ${languageName}
+    // Score achieved: ${score}/${maxScore}
+    // Judge status: ${status}
+    // Expected output: ${question.sample_output || 'None'}
+    // ${compileErr ? `\nCompiler error:\n${compileErr}` : ''}
+    // ${stderr ? `\nRuntime error:\n${stderr}` : ''}
+    // ${stdout ? `\nOutput produced:\n${stdout}` : ''}
+
+    // Student code:
+    // ${code}
+
+    // Respond ONLY with this JSON object. No markdown, no explanation outside the JSON:
+    // {
+    //   "summary": "One sentence verdict on the submission",
+    //   "what_went_wrong": "Specific explanation of the error (null if the code is correct)",
+    //   "hint": "A nudge toward the fix without giving the full answer (null if correct)",
+    //   "positive": "One thing the student did well in their code"
+} `;
 }
 
 // ── JSON parsers ─────────────────────────────────────────────────
 
+function parseJsonArray(raw, label) {
 function parseJsonArray(raw, label) {
     const cleaned = stripCodeFences(raw);
     try {
@@ -131,21 +169,21 @@ function parseJsonArray(raw, label) {
         if (!Array.isArray(parsed)) throw new Error('Response is not a JSON array');
         return parsed;
     } catch (err) {
-        console.error(`[llmService] Failed to parse ${label} JSON:`, err.message);
+        console.error(`[llmService] Failed to parse ${ label } JSON: `, err.message);
         console.error('[llmService] Cleaned response:', cleaned.substring(0, 500) + (cleaned.length > 500 ? '...' : ''));
         console.error('[llmService] Raw response length:', raw.length);
 
         // Try to recover from truncated JSON
         try {
             const recovered = attemptRecoverTruncatedJson(cleaned);
-            console.warn(`[llmService] Attempting recovery for ${label}...`);
+            console.warn(`[llmService] Attempting recovery for ${ label }...`);
             const parsed = JSON.parse(recovered);
             if (!Array.isArray(parsed)) throw new Error('Recovered response is not a JSON array');
-            console.warn(`[llmService] Successfully recovered ${label} JSON`);
+            console.warn(`[llmService] Successfully recovered ${ label } JSON`);
             return parsed;
         } catch (recoveryErr) {
             console.error('[llmService] Recovery failed:', recoveryErr.message);
-            throw new Error(`LLM returned invalid JSON for ${label}: ${err.message}`);
+            throw new Error(`LLM returned invalid JSON for ${ label }: ${ err.message } `);
         }
     }
 }
@@ -157,19 +195,19 @@ function parseJsonObject(raw, label) {
         if (typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Response is not a JSON object');
         return parsed;
     } catch (err) {
-        console.error(`[llmService] Failed to parse ${label} JSON:`, err.message);
+        console.error(`[llmService] Failed to parse ${ label } JSON: `, err.message);
         console.error('[llmService] Cleaned response:', cleaned.substring(0, 500) + (cleaned.length > 500 ? '...' : ''));
         console.error('[llmService] Raw response length:', raw.length);
-        throw new Error(`LLM returned invalid JSON for ${label}: ${err.message}`);
+        throw new Error(`LLM returned invalid JSON for ${ label }: ${ err.message } `);
     }
 }
 
 function stripCodeFences(text) {
     // Remove ```json ... ``` or ``` ... ``` wrappers LLMs sometimes add despite instructions
     return text
-        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/^```(?: json) ?\s */i, '')
         .replace(/\s*```\s*$/, '')
-        .trim();
+    .trim();
 }
 
 function attemptRecoverTruncatedJson(text) {

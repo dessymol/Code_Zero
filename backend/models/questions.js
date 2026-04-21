@@ -37,9 +37,15 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       defaultValue: 100,
     }
+    ,
+    testcases_approved: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    }
   }, {
     timestamps: true,
-    tableName: 'Questions' // keep same table name if your migrations/DB use it
+    tableName: 'Questions'
   });
 
   return Question;

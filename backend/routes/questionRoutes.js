@@ -5,7 +5,7 @@ const questionController = require('../controllers/questionController');
 const testcaseController = require('../controllers/testcaseController');
 
 // adjust path if your auth middleware path differs
-const { authMiddleware, roleMiddleware, studentAuth , adminAuth } = require('../Middleware/authmiddleware');
+const { authMiddleware, roleMiddleware, studentAuth, adminAuth } = require('../Middleware/authmiddleware');
 
 // Create question (faculty)
 router.post('/add', authMiddleware, roleMiddleware('faculty'), questionController.createQuestion);
@@ -29,11 +29,15 @@ router.post('/:id/toggle-batch', authMiddleware, roleMiddleware('faculty'), ques
 router.post('/:questionId/batch/:batchId/toggle', authMiddleware, roleMiddleware('faculty'), questionController.toggleQuestionForBatch);
 
 // Test case management (faculty only)
+// router.post('/:id/testcases/generate', authMiddleware, roleMiddleware('faculty'), testcaseController.generate);
+// router.post('/:id/testcases/approve', authMiddleware, roleMiddleware('faculty'), testcaseController.approve);
+// router.get('/:id/testcases', authMiddleware, roleMiddleware('faculty'), testcaseController.list);
+// router.delete('/:id/testcases/:tcId', authMiddleware, roleMiddleware('faculty'), testcaseController.remove);
 router.post('/:id/testcases/generate', authMiddleware, roleMiddleware('faculty'), testcaseController.generate);
 router.post('/:id/testcases/approve', authMiddleware, roleMiddleware('faculty'), testcaseController.approve);
 router.get('/:id/testcases', authMiddleware, roleMiddleware('faculty'), testcaseController.list);
 router.delete('/:id/testcases/:tcId', authMiddleware, roleMiddleware('faculty'), testcaseController.remove);
-
+router.delete('/:id/testcases', authMiddleware, roleMiddleware('faculty'), testcaseController.reset);
 // Student-facing: get active questions for a batch (alternative endpoint)
 router.get('/for-batch/:batchId', studentAuth, questionController.getActiveQuestionsForBatch);
 

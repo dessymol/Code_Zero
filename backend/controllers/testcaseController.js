@@ -12,7 +12,15 @@ exports.generate = async (req, res) => {
     try {
         const question = await Question.findByPk(req.params.id);
         if (!question) return res.status(404).json({ message: 'Question not found' });
-
+        const existingCount = await Testcase.count({ where: { question_id: question.id } });
+        if (existingCount > 0) {
+            return res.status(409).json({
+                success: false,
+                alreadyExists: true,
+                count: existingCount,
+                message: 'Test cases already exist for this question. Delete them first to regenerate.',
+            });
+        }
         const count = parseInt(process.env.TESTCASE_COUNT || '5', 10);
         const testcases = await generateTestCases(question, count);
 
@@ -53,6 +61,10 @@ exports.approve = async (req, res) => {
         }));
 
         const created = await Testcase.bulkCreate(records);
+        await Question.update(
+            { testcases_approved: true },
+            { where: { id: question.id } }
+        );
         return res.status(201).json({ success: true, saved: created.length });
     } catch (err) {
         console.error('[testcaseController] approve error:', err.message);
@@ -89,6 +101,30 @@ exports.remove = async (req, res) => {
         await tc.destroy();
         return res.json({ success: true });
     } catch (err) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+/**
+ * DELETE / api / questions /: id / testcases
+ * Bulk - deletes ALL testcases for a question and resets the approval flag.
+ * This is the unlock gate — once reset, faculty can call / generate again.
+ */
+exports.reset = async (req, res) => {
+    try {
+        const question = await Question.findByPk(req.params.id);
+        if (!question) return res.status(404).json({ message: 'Question not found' });
+
+        const deleted = await Testcase.destroy({ where: { question_id: question.id } });
+
+        await Question.update(
+            { testcases_approved: false },
+            { where: { id: question.id } }
+        );
+
+        return res.json({ success: true, deleted, testcases_approved: false });
+    } catch (err) {
+        console.error('[testcaseController] reset error:', err.message);
         return res.status(500).json({ success: false, message: err.message });
     }
 };
