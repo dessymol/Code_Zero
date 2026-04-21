@@ -24,21 +24,6 @@ const readNum = (obj, ...keys) => {
   return 0;
 };
 
-<<<<<<< HEAD
-=======
-const uniqueByStudent = (students = []) => {
-  const seen = new Set();
-  return students.filter((student) => {
-    const key = student?.id != null
-      ? `id:${student.id}`
-      : `email:${String(student?.email || '').toLowerCase()}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-};
-
->>>>>>> e9c6f67 (fixed merge conflicts)
 function Donut({ data = {}, size = 120, subtitle = '' }) {
   const entries = Object.entries(data || {});
   const total = Math.max(entries.reduce((s, [, v]) => s + (Number(v) || 0), 0), 1);
@@ -235,21 +220,6 @@ export default function FacultyDashboard() {
     try {
       const res = await axios.get(`${API}/courses/faculty-courses`, { headers });
       const list = Array.isArray(res.data?.courses) ? res.data.courses : [];
-<<<<<<< HEAD
-=======
-
-      await Promise.all(list.map(async (c) => {
-        if (readNum(c, 'studentCount', 'count', 'students') > 0) return;
-        try {
-          const r = await axios.get(`${API}/students/by-course/${c.id}`, { headers });
-          const students = Array.isArray(r.data?.students) ? r.data.students : (Array.isArray(r.data) ? r.data : []);
-          c.studentCount = uniqueByStudent(students).length;
-        } catch (e) {
-          c.studentCount = 0;
-        }
-      }));
-
->>>>>>> e9c6f67 (fixed merge conflicts)
       const missing = list.filter(c => (c.submissionCount === undefined || c.submissionCount === null)).slice(0, 6);
       await Promise.all(missing.map(async (c) => {
         try {
@@ -344,18 +314,6 @@ export default function FacultyDashboard() {
   const totalSubmissions = courses.reduce((s, c) => s + readNum(c, 'submissionCount', 'submissions'), 0);
   const avgPerCourse = totalCourses ? Math.round(totalSubmissions / totalCourses) : 0;
 
-<<<<<<< HEAD
-=======
-  const courseStudentMap = useMemo(() => {
-    const map = new Map();
-    courses.forEach((course) => {
-      const key = String(course?.id ?? course?.course_id ?? course?.courseId ?? '');
-      if (key) map.set(key, readNum(course, 'studentCount', 'count', 'students'));
-    });
-    return map;
-  }, [courses]);
-
->>>>>>> e9c6f67 (fixed merge conflicts)
   const statusCounts = useMemo(() => {
     if (summary && summary.courseStatus) return summary.courseStatus;
     const m = {};
@@ -369,31 +327,14 @@ export default function FacultyDashboard() {
   const groupedSeries = useMemo(() => {
     if (summary && Array.isArray(summary.courses)) {
       const submissions = { name: 'Submissions', values: (summary.courses || []).slice(0, 6).map(s => ({ label: s.name || s.course_name, value: s.submissionsCount || s.submissions || 0 })) };
-<<<<<<< HEAD
       const students = { name: 'Students', values: (summary.courses || []).slice(0, 6).map(s => ({ label: s.name || s.course_name, value: s.studentCount || s.students || 0 })) };
-=======
-      const students = {
-        name: 'Students',
-        values: (summary.courses || []).slice(0, 6).map(s => {
-          const id = String(s.id ?? s.course_id ?? s.courseId ?? '');
-          const fallback = id ? (courseStudentMap.get(id) || 0) : 0;
-          return { label: s.name || s.course_name, value: Math.max(readNum(s, 'studentCount', 'students'), fallback) };
-        })
-      };
->>>>>>> e9c6f67 (fixed merge conflicts)
       return [submissions, students];
     }
     const sorted = courses.slice().sort((a, b) => readNum(b, 'submissionCount', 'submissions') - readNum(a, 'submissionCount', 'submissions')).slice(0, 6);
     const submissions = { name: 'Submissions', values: sorted.map(c => ({ label: c.name || `C${c.id}`, value: readNum(c, 'submissionCount', 'submissions') })) };
-<<<<<<< HEAD
     const students = { name: 'Students', values: sorted.map(c => ({ label: c.name || `C${c.id}`, value: readNum(c, 'studentCount', 'count') })) };
     return [submissions, students];
   }, [courses, summary]);
-=======
-    const students = { name: 'Students', values: sorted.map(c => ({ label: c.name || `C${c.id}`, value: readNum(c, 'studentCount', 'count', 'students') })) };
-    return [submissions, students];
-  }, [courses, summary, courseStudentMap]);
->>>>>>> e9c6f67 (fixed merge conflicts)
 
   const areaTimeseries = useMemo(() => {
     if (summary && Array.isArray(summary.timeseries)) {

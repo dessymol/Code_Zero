@@ -252,18 +252,7 @@ export default function AddAdmin() {
                   </div>
                 </div>
 
-<<<<<<< HEAD
                 <div className="p-6 space-y-4">
-=======
-                <form
-                  className="p-6 space-y-4"
-                  autoComplete="off"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleAdd();
-                  }}
-                >
->>>>>>> e9c6f67 (fixed merge conflicts)
                   {addError && (
                     <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-sm font-medium">
                       {addError}
@@ -281,14 +270,7 @@ export default function AddAdmin() {
                       <div className="relative">
                         <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                         <input
-<<<<<<< HEAD
                           type="text"
-=======
-                          id="create-admin-name"
-                          name="createAdminName"
-                          type="text"
-                          autoComplete="off"
->>>>>>> e9c6f67 (fixed merge conflicts)
                           value={form.name}
                           onChange={e => setForm({ ...form, name: e.target.value })}
                           className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium text-slate-700 transition-all"
@@ -301,14 +283,7 @@ export default function AddAdmin() {
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                         <input
-<<<<<<< HEAD
                           type="email"
-=======
-                          id="create-admin-email"
-                          name="createAdminEmail"
-                          type="email"
-                          autoComplete="off"
->>>>>>> e9c6f67 (fixed merge conflicts)
                           value={form.email}
                           onChange={e => setForm({ ...form, email: e.target.value })}
                           className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium text-slate-700 transition-all"
@@ -321,15 +296,7 @@ export default function AddAdmin() {
                       <div className="relative">
                         <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                         <input
-<<<<<<< HEAD
                           type="text"
-=======
-                          id="create-admin-phone"
-                          name="createAdminPhone"
-                          type="text"
-                          autoComplete="tel"
-                          inputMode="tel"
->>>>>>> e9c6f67 (fixed merge conflicts)
                           value={form.phone}
                           onChange={e => setForm({ ...form, phone: e.target.value })}
                           className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium text-slate-700 transition-all"
@@ -342,14 +309,7 @@ export default function AddAdmin() {
                       <div className="relative">
                         <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                         <input
-<<<<<<< HEAD
                           type="password"
-=======
-                          id="create-admin-password"
-                          name="createAdminPassword"
-                          type="password"
-                          autoComplete="new-password"
->>>>>>> e9c6f67 (fixed merge conflicts)
                           value={form.password}
                           onChange={e => setForm({ ...form, password: e.target.value })}
                           className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium text-slate-700 transition-all"
@@ -361,21 +321,13 @@ export default function AddAdmin() {
 
                   <div className="pt-4 flex gap-3">
                     <button
-<<<<<<< HEAD
-=======
-                      type="button"
->>>>>>> e9c6f67 (fixed merge conflicts)
                       onClick={() => setForm({ name: "", email: "", phone: "", password: "" })}
                       className="flex-1 py-2.5 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors"
                     >
                       Clear
                     </button>
                     <button
-<<<<<<< HEAD
                       onClick={handleAdd}
-=======
-                      type="submit"
->>>>>>> e9c6f67 (fixed merge conflicts)
                       disabled={adding}
                       className="flex-[2] py-2.5 bg-gradient-to-r bg-indigo-600 text-slate-600 font-bold rounded-xl hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
@@ -383,11 +335,7 @@ export default function AddAdmin() {
                       Create Admin
                     </button>
                   </div>
-<<<<<<< HEAD
                 </div>
-=======
-                </form>
->>>>>>> e9c6f67 (fixed merge conflicts)
               </div>
 
               {/* System Overview KPIs */}
@@ -540,8 +488,4 @@ export default function AddAdmin() {
       </div>
     </AdminLayout>
   );
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> e9c6f67 (fixed merge conflicts)
