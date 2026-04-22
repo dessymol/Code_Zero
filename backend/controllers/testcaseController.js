@@ -19,7 +19,20 @@ exports.generate = async (req, res) => {
         return res.json({ success: true, testcases });
     } catch (err) {
         console.error('[testcaseController] generate error:', err.message);
-        return res.status(500).json({ success: false, message: err.message });
+        
+        // Provide user-friendly error messages
+        let userMessage = err.message;
+        if (err.message.includes('All LLM providers failed')) {
+            if (err.message.includes('503') || err.message.includes('Service Unavailable')) {
+                userMessage = 'Gemini API is experiencing high demand. Please try again in a few moments.';
+            } else if (err.message.includes('Ollama is not running')) {
+                userMessage = 'Local LLM service (Ollama) is not available. Please start Ollama or use Gemini API.';
+            } else {
+                userMessage = 'All LLM services are currently unavailable. Please try again later.';
+            }
+        }
+        
+        return res.status(500).json({ success: false, message: userMessage });
     }
 };
 

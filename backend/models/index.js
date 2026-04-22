@@ -7,6 +7,7 @@ const { sequelize } = require('../config/connection');
 
 const db = {};
 db.SubmissionFeedback = require('./submissionfeedback')(sequelize, DataTypes);
+db.AuditLog = require('./auditlog')(sequelize, DataTypes);
 
 /* ---------------------- Load model factory files ---------------------- */
 db.User = require('./users')(sequelize, DataTypes);

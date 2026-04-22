@@ -14,6 +14,9 @@ const SuperAdminDashboard = () => {
   const [users, setUsers] = useState([]);
   const [courses, setCourses] = useState([]);
   const [students, setStudents] = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [logStats, setLogStats] = useState(null);
+  const [logsLoading, setLogsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -54,7 +57,26 @@ const SuperAdminDashboard = () => {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  const loadLogs = async () => {
+    setLogsLoading(true);
+    try {
+      const logsRes = await axios.get(`${API_BASE}/audit-logs?limit=10&page=1&days=7`);
+      setLogs(logsRes.data?.data?.rows || []);
+      
+      const statsRes = await axios.get(`${API_BASE}/audit-logs/stats`);
+      setLogStats(statsRes.data?.data || null);
+    } catch (err) {
+      console.error('Failed to load audit logs:', err);
+      setLogs([]);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  useEffect(() => { 
+    load(); 
+    loadLogs();
+  }, []);
 
   const stats = useMemo(() => {
     const byRole = users.reduce((acc, u) => {
@@ -192,10 +214,40 @@ const SuperAdminDashboard = () => {
 
           <div className="lms-card p-5">
             <h3 className="text-lg font-bold text-slate-800 mb-4">System Logs</h3>
-            <div className="p-4 bg-white rounded-xl border border-slate-200">
-              <p className="text-xs text-slate-500">
-                Log collection is not configured yet. If you want centralized logs, I can add a simple audit log table and record admin actions.
-              </p>
+            <div className="space-y-2">
+              {logsLoading ? (
+                <p className="text-xs text-slate-400">Loading logs...</p>
+              ) : logs.length === 0 ? (
+                <p className="text-xs text-slate-400">No audit logs found in the last 7 days.</p>
+              ) : (
+                <>
+                  {logStats && (
+                    <div className="mb-3 p-2 bg-slate-50 rounded-lg border border-slate-100">
+                      <p className="text-xs font-bold text-slate-600">
+                        Total: {logStats.total} | Last 24h: {logStats.last24h}
+                      </p>
+                    </div>
+                  )}
+                  {logs.slice(0, 6).map((log) => (
+                    <div key={log.id} className="p-2 bg-slate-50 rounded-lg border border-slate-100 text-xs">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-bold text-slate-700">{log.action}</p>
+                          <p className="text-slate-500">{log.user_email || `User #${log.user_id}`}</p>
+                        </div>
+                        <span className="text-slate-400 whitespace-nowrap">
+                          {new Date(log.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                      {log.resource_type && (
+                        <p className="text-slate-500 mt-1">
+                          {log.resource_type} {log.resource_id && `#${log.resource_id}`}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           </div>
         </div>
