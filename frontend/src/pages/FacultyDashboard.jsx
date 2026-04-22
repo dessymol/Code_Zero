@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const API = 'http://localhost:3000/api';
+const API = `${import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000'}/api`;
 
 const COLORS = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
 const PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#64748b'];
@@ -22,18 +22,6 @@ const readNum = (obj, ...keys) => {
     }
   }
   return 0;
-};
-
-const uniqueByStudent = (students = []) => {
-  const seen = new Set();
-  return students.filter((student) => {
-    const key = student?.id != null
-      ? `id:${student.id}`
-      : `email:${String(student?.email || '').toLowerCase()}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 };
 
 function Donut({ data = {}, size = 120, subtitle = '' }) {
@@ -196,6 +184,36 @@ function StatCard({ title, value, icon, color, loading = false, subtitle }) {
   );
 }
 
+const getSubmissionBadge = (submission) => {
+  const status = String(submission?.status || submission?.verdict || '').toLowerCase();
+
+  if (['accepted', 'passed', 'success'].includes(status)) {
+    return {
+      label: 'Accepted',
+      className: 'bg-green-100 text-green-700'
+    };
+  }
+
+  if (['failed', 'rejected', 'error'].includes(status)) {
+    return {
+      label: 'Failed',
+      className: 'bg-red-100 text-red-700'
+    };
+  }
+
+  if (status === 'pending') {
+    return {
+      label: 'Pending',
+      className: 'bg-amber-100 text-amber-700'
+    };
+  }
+
+  return {
+    label: submission?.status || submission?.verdict || 'Unknown',
+    className: 'bg-slate-100 text-slate-700'
+  };
+};
+
 export default function FacultyDashboard() {
   const navigate = useNavigate();
   const [courses, setCourses] = useState([]);
@@ -232,30 +250,29 @@ export default function FacultyDashboard() {
     try {
       const res = await axios.get(`${API}/courses/faculty-courses`, { headers });
       const list = Array.isArray(res.data?.courses) ? res.data.courses : [];
-
-      await Promise.all(list.map(async (c) => {
-        if (readNum(c, 'studentCount', 'count', 'students') > 0) return;
+      const enriched = await Promise.all(list.map(async (c) => {
         try {
-          const r = await axios.get(`${API}/students/by-course/${c.id}`, { headers });
-          const students = Array.isArray(r.data?.students) ? r.data.students : (Array.isArray(r.data) ? r.data : []);
-          c.studentCount = uniqueByStudent(students).length;
+          const [submissionRes, studentRes] = await Promise.all([
+            axios.get(`${API}/submissions/faculty/course/${c.id}`, { headers }),
+            axios.get(`${API}/students/by-course/${c.id}`, { headers })
+          ]);
+          const subs = Array.isArray(submissionRes.data?.submissions) ? submissionRes.data.submissions : (submissionRes.data?.data || []);
+          const students = Array.isArray(studentRes.data?.students) ? studentRes.data.students : (studentRes.data?.data || []);
+          return {
+            ...c,
+            submissionCount: subs.length,
+            studentCount: students.length,
+            _fetchedSubmissions: subs
+          };
         } catch (e) {
-          c.studentCount = 0;
+          return {
+            ...c,
+            submissionCount: Number(c.submissionCount || 0),
+            studentCount: Number(c.studentCount || c.count || c.students || 0)
+          };
         }
       }));
-
-      const missing = list.filter(c => (c.submissionCount === undefined || c.submissionCount === null)).slice(0, 6);
-      await Promise.all(missing.map(async (c) => {
-        try {
-          const r = await axios.get(`${API}/submissions/faculty/course/${c.id}`, { headers });
-          const subs = Array.isArray(r.data?.submissions) ? r.data.submissions : (r.data?.data || []);
-          c.submissionCount = subs.length;
-          c._fetchedSubmissions = subs;
-        } catch (e) {
-          c.submissionCount = 0;
-        }
-      }));
-      setCourses(list);
+      setCourses(enriched);
     } catch (err) {
       console.error('fetchCourses error', err?.response?.data || err.message);
       setCourses([]);
@@ -338,15 +355,6 @@ export default function FacultyDashboard() {
   const totalSubmissions = courses.reduce((s, c) => s + readNum(c, 'submissionCount', 'submissions'), 0);
   const avgPerCourse = totalCourses ? Math.round(totalSubmissions / totalCourses) : 0;
 
-  const courseStudentMap = useMemo(() => {
-    const map = new Map();
-    courses.forEach((course) => {
-      const key = String(course?.id ?? course?.course_id ?? course?.courseId ?? '');
-      if (key) map.set(key, readNum(course, 'studentCount', 'count', 'students'));
-    });
-    return map;
-  }, [courses]);
-
   const statusCounts = useMemo(() => {
     if (summary && summary.courseStatus) return summary.courseStatus;
     const m = {};
@@ -360,21 +368,14 @@ export default function FacultyDashboard() {
   const groupedSeries = useMemo(() => {
     if (summary && Array.isArray(summary.courses)) {
       const submissions = { name: 'Submissions', values: (summary.courses || []).slice(0, 6).map(s => ({ label: s.name || s.course_name, value: s.submissionsCount || s.submissions || 0 })) };
-      const students = {
-        name: 'Students',
-        values: (summary.courses || []).slice(0, 6).map(s => {
-          const id = String(s.id ?? s.course_id ?? s.courseId ?? '');
-          const fallback = id ? (courseStudentMap.get(id) || 0) : 0;
-          return { label: s.name || s.course_name, value: Math.max(readNum(s, 'studentCount', 'students'), fallback) };
-        })
-      };
+      const students = { name: 'Students', values: (summary.courses || []).slice(0, 6).map(s => ({ label: s.name || s.course_name, value: s.studentCount || s.students || 0 })) };
       return [submissions, students];
     }
     const sorted = courses.slice().sort((a, b) => readNum(b, 'submissionCount', 'submissions') - readNum(a, 'submissionCount', 'submissions')).slice(0, 6);
     const submissions = { name: 'Submissions', values: sorted.map(c => ({ label: c.name || `C${c.id}`, value: readNum(c, 'submissionCount', 'submissions') })) };
-    const students = { name: 'Students', values: sorted.map(c => ({ label: c.name || `C${c.id}`, value: readNum(c, 'studentCount', 'count', 'students') })) };
+    const students = { name: 'Students', values: sorted.map(c => ({ label: c.name || `C${c.id}`, value: readNum(c, 'studentCount', 'count') })) };
     return [submissions, students];
-  }, [courses, summary, courseStudentMap]);
+  }, [courses, summary]);
 
   const areaTimeseries = useMemo(() => {
     if (summary && Array.isArray(summary.timeseries)) {
@@ -533,8 +534,8 @@ export default function FacultyDashboard() {
                       </div>
                       <div className="text-[10px] text-slate-500 font-medium truncate mb-2">{s.course_name}</div>
                       <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${s.verdict === 'Accepted' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                          {s.verdict || 'Pending'}
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getSubmissionBadge(s).className}`}>
+                          {getSubmissionBadge(s).label}
                         </span>
                       </div>
                     </div>

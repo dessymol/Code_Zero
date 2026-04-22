@@ -11,7 +11,7 @@ const FacultyLogin = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const API_URL = 'http://localhost:3000/api/v1/users/login';
+  const API_URL = 'http://localhost:4000/api/v1/users/login';
 
   const handleLogin = async (e) => {
     e.preventDefault();

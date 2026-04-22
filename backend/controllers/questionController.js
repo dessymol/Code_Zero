@@ -1,4 +1,4 @@
-// controllers/questionController.js
+﻿// controllers/questionController.js
 const { Op } = require('sequelize');
 const {
   Question,
@@ -7,8 +7,39 @@ const {
   Course,
   User,
   sequelize,
-  Student
+  Student,
+  Testcase
 } = require('../models');
+
+const normalizeTestcases = (testcases = []) =>
+  Array.isArray(testcases)
+    ? testcases
+        .map((testcase) => ({
+          input: String(testcase?.input || ''),
+          output: String(testcase?.output || ''),
+          is_public: Boolean(testcase?.is_public)
+        }))
+        .filter((testcase) => testcase.input !== '' || testcase.output !== '')
+    : [];
+
+const syncQuestionTestcases = async (questionId, rawTestcases = [], transaction = undefined) => {
+  const normalized = normalizeTestcases(rawTestcases);
+
+  await Testcase.destroy({
+    where: { question_id: questionId },
+    ...(transaction ? { transaction } : {})
+  });
+
+  if (!normalized.length) return [];
+
+  return Testcase.bulkCreate(
+    normalized.map((testcase) => ({
+      ...testcase,
+      question_id: questionId
+    })),
+    transaction ? { transaction } : undefined
+  );
+};
 
 /**
  * Create a question (faculty)
@@ -44,6 +75,8 @@ exports.createQuestion = async (req, res) => {
       course_id,
       language_id,
       score,
+      duration = 10,
+      testcases = [],
     } = req.body || {};
 
     // basic validation
@@ -69,13 +102,17 @@ exports.createQuestion = async (req, res) => {
       faculty_id: facultyId === null ? null : Number(facultyId),
       language_id: Number(language_id),
       score: Number(score),
+      duration: Number(duration),
     };
 
     const newQuestion = await Question.create(payload);
+    await syncQuestionTestcases(newQuestion.id, testcases);
 
-    // Optionally: If you want to return a payload with resolved faculty name,
-    // you can re-query with include(User) here. For now we return the created record.
-    return res.status(201).json(newQuestion);
+    const createdQuestion = await Question.findByPk(newQuestion.id, {
+      include: [{ model: Testcase, attributes: ['id', 'input', 'output', 'is_public'] }]
+    });
+
+    return res.status(201).json(createdQuestion);
   } catch (err) {
     console.error('createQuestion error:', err);
     const details = err && err.errors ? err.errors.map(e => ({ path: e.path, message: e.message })) : null;
@@ -105,16 +142,24 @@ exports.updateQuestion = async (req, res) => {
       return res.status(403).json({ message: 'Forbidden: not owner' });
     }
 
-    const allowed = ['title', 'description', 'sample_input', 'sample_output', 'language_id', 'score', 'faculty_id'];
+    const allowed = ['title', 'description', 'sample_input', 'sample_output', 'duration', 'language_id', 'score', 'faculty_id'];
     const updates = {};
     for (const k of allowed) {
       if (req.body[k] !== undefined) updates[k] = req.body[k];
     }
 
-    if (Object.keys(updates).length === 0) return res.status(400).json({ message: 'No valid fields provided' });
+    if (Object.keys(updates).length === 0 && req.body.testcases === undefined) {
+      return res.status(400).json({ message: 'No valid fields provided' });
+    }
 
     await question.update(updates);
-    const updated = await Question.findByPk(id);
+    if (req.body.testcases !== undefined) {
+      await syncQuestionTestcases(id, req.body.testcases);
+    }
+
+    const updated = await Question.findByPk(id, {
+      include: [{ model: Testcase, attributes: ['id', 'input', 'output', 'is_public'] }]
+    });
     return res.json(updated);
   } catch (err) {
     console.error('updateQuestion error:', err);
@@ -135,6 +180,7 @@ exports.deleteQuestion = async (req, res) => {
       return res.status(403).json({ message: 'Forbidden: not owner' });
     }
 
+    await Testcase.destroy({ where: { question_id: id } });
     await question.destroy();
     return res.status(200).json({ message: 'Question deleted' });
   } catch (err) {
@@ -172,7 +218,8 @@ exports.getQuestionBankForCourse = async (req, res) => {
     const questions = await Question.findAll({
       where: { course_id: courseId },
       order: [['created_at', 'ASC']],
-      attributes: baseAttributes
+      attributes: baseAttributes,
+      include: [{ model: Testcase, attributes: ['id', 'input', 'output', 'is_public'], required: false }]
     });
 
     if (!includeBatches) {
@@ -301,6 +348,11 @@ exports.getQuestionsByCourse = async (req, res) => {
       where: { course_id: courseId },
       attributes: ['id', 'title', 'description', 'sample_input', 'sample_output', 'course_id', 'faculty_id'],
       include: [
+        {
+          model: Testcase,
+          attributes: ['id', 'input', 'output', 'is_public'],
+          required: false
+        },
         {
           model: Course,
           as: 'Course',
@@ -466,6 +518,11 @@ exports.getQuestionsForStudentCourse = async (req, res, next) => {
       where: { course_id: courseId },
       include: [
         {
+          model: Testcase,
+          attributes: ['id', 'input', 'output', 'is_public'],
+          required: false
+        },
+        {
           model: QuestionBatch,
           as: 'QuestionBatches',   // <-- IMPORTANT: match association alias
           required: false,         // left join -> get questions without any QuestionBatch rows
@@ -505,6 +562,12 @@ exports.getQuestionsForStudentCourse = async (req, res, next) => {
         sample_output: q.sample_output || q.sampleOutput || null,
         language_id,           // <-- newly included
         score,                 // <-- newly included
+        testcases: (q.Testcases || []).map((testcase) => ({
+          id: testcase.id,
+          input: testcase.input,
+          output: testcase.output,
+          is_public: testcase.is_public
+        })),
         batch_states: (qbs || []).reduce((acc, qb) => {
           acc[qb.batch_id] = { enabled: !!qb.enabled, toggled_at: qb.toggled_at || null };
           return acc;
@@ -560,7 +623,7 @@ exports.getAvailableQuestionsForStudent = async (req, res, next) => {
         model: Question,
         required: true,
         where: { course_id: courseId },
-        attributes: ['id', 'title', 'description', 'sample_input', 'sample_output', 'language_id', 'score']
+        attributes: ['id', 'title', 'description', 'sample_input', 'sample_output', 'duration']
       }],
       // if you have pagination you can add limit/offset
     });
@@ -581,3 +644,4 @@ exports.getAvailableQuestionsForStudent = async (req, res, next) => {
     next(err);
   }
 };
+

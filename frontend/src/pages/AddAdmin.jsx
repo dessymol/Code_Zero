@@ -1,429 +1,503 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import axios from 'axios';
 import {
-  Plus, RefreshCw, Download,
-  Users, Shield, Mail, Phone, Key,
-  School, GraduationCap, LayoutDashboard, Filter, Activity, Terminal
-} from "lucide-react"; // Using Lucide icons
-import AdminLayout from "./AdminLayout";
-import axios from "axios";
+  Plus,
+  RefreshCw,
+  Download,
+  Users,
+  Shield,
+  Mail,
+  Phone,
+  Key,
+  School,
+  GraduationCap,
+  LayoutDashboard,
+  Activity,
+  Terminal,
+  UserCog
+} from 'lucide-react';
+import AdminLayout from './AdminLayout';
 
-// Constants
-const API_USERS = "http://localhost:3000/api/v1/users";
-const API_COURSES = "http://localhost:3000/api/courses";
-const API_STUDENTS = "http://localhost:3000/api/students";
-const API_FACULTIES = "http://localhost:3000/api/v1/users/faculties";
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:4000';
+const API_USERS = `${API_ORIGIN}/api/v1/users`;
+const API_ALL_USERS = `${API_USERS}/all-users`;
+const API_COURSES = `${API_ORIGIN}/api/courses`;
+const API_STUDENTS = `${API_ORIGIN}/api/students`;
+const API_FACULTIES = `${API_USERS}/faculties`;
+const getCourseWithFacultiesUrl = (courseId) => `${API_COURSES}/${courseId}/with-faculties`;
+const getStudentsByCourseUrl = (courseId) => `${API_STUDENTS}/by-course/${courseId}`;
 
 const getAuthHeaders = () => {
   try {
-    const token = localStorage.getItem("token");
+    const token = localStorage.getItem('token');
     return token ? { Authorization: `Bearer ${token}` } : {};
   } catch {
     return {};
   }
 };
 
-const safeArray = (v) => Array.isArray(v) ? v : [];
+const safeArray = (value) => (Array.isArray(value) ? value : []);
+
+const getResponseData = (payload, keys = []) => {
+  if (Array.isArray(payload)) return payload;
+  for (const key of keys) {
+    if (Array.isArray(payload?.[key])) return payload[key];
+  }
+  return [];
+};
+
+const getRequestErrorMessage = (error) =>
+  error?.response?.data?.message || error?.message || 'Unexpected request failure';
+
+const getCreatedDate = (item) => item?.createdAt || item?.created_at || item?.created_on || '';
+
+const getEntityId = (item) =>
+  item?.id ?? item?._id ?? item?.courseId ?? item?.course_id ?? item?.course_code ?? item?.code ?? item?.name;
+
+const getResponseData = (response) => response?.data?.data ?? response?.data ?? null;
+
+const getRequestErrorMessage = (error, fallback) =>
+  error?.response?.data?.message || error?.message || fallback;
+
+const getCreatedDate = (item) => item?.createdAt || item?.created_at || item?.updatedAt || item?.updated_at || null;
+
+const getEntityId = (item) =>
+  item?.id ?? item?._id ?? item?.courseId ?? item?.course_id ?? item?.course_code ?? item?.code ?? null;
 
 export default function AddAdmin() {
-  // Data State
   const [admins, setAdmins] = useState([]);
   const [courses, setCourses] = useState([]);
   const [students, setStudents] = useState([]);
   const [faculties, setFaculties] = useState([]);
 
-  // UI State
   const [loading, setLoading] = useState(true);
-  const [loadingError, setLoadingError] = useState("");
+  const [loadingError, setLoadingError] = useState('');
   const [adding, setAdding] = useState(false);
-  const [addError, setAddError] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
+  const [addError, setAddError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [debugLogs, setDebugLogs] = useState([]);
 
-  // Form State
-  const [form, setForm] = useState({ name: "", email: "", phone: "", password: "" });
+  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
 
   const pushDebug = useCallback((label, payload) => {
-    setDebugLogs(prev => [{ ts: new Date().toLocaleString(), label, payload }, ...prev].slice(0, 200));
+    setDebugLogs((prev) => [{ ts: new Date().toLocaleString(), label, payload }, ...prev].slice(0, 200));
   }, []);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
-    setLoadingError("");
+    setLoadingError('');
+
     try {
       const headers = getAuthHeaders();
-      const [usersRes, coursesRes, studentsRes, facultiesRes] = await Promise.allSettled([
-        axios.get(API_USERS, { headers }).catch(e => e),
-        axios.get(`${API_COURSES}/get-all-courses`).catch(e => e),
-        axios.get(`${API_STUDENTS}/get-all-students`).catch(e => e),
-        axios.get(API_FACULTIES, { headers }).catch(e => e)
+      const [usersRes, coursesRes, studentsRes, facultiesRes] = await Promise.all([
+        axios.get(API_ALL_USERS, { headers }),
+        axios.get(`${API_COURSES}/get-all-courses`, { headers }),
+        axios.get(`${API_STUDENTS}/get-all-students`, { headers }),
+        axios.get(API_FACULTIES, { headers })
       ]);
 
-      // Users/Admins
-      if (usersRes.status === "fulfilled" && usersRes.value) {
-        const raw = usersRes.value.data?.data ?? usersRes.value.data ?? usersRes.value;
-        const arr = Array.isArray(raw) ? raw.filter(u => (u.role || "").toLowerCase() === "admin") : [];
-        setAdmins(arr);
-        pushDebug("GET /users", { ok: true, count: arr.length });
-      } else {
-        setAdmins([]);
-        pushDebug("GET /users", { ok: false });
-      }
+      const allUsers = getResponseData(usersRes.data, ['data', 'users']);
+      const baseCourses = getResponseData(coursesRes.data, ['courses', 'data']);
+      const allStudents = getResponseData(studentsRes.data, ['students', 'data']);
+      const allFaculties = getResponseData(facultiesRes.data, ['faculties', 'data']);
 
-      // Courses
-      if (coursesRes.status === "fulfilled" && coursesRes.value) {
-        const raw = coursesRes.value.data?.courses ?? coursesRes.value.data ?? coursesRes.value;
-        setCourses(safeArray(raw));
-        pushDebug("GET /courses", { ok: true, count: safeArray(raw).length });
-      } else {
-        setCourses([]);
-        pushDebug("GET /courses", { ok: false });
-      }
+      const adminsOnly = safeArray(allUsers).filter((user) =>
+        ['admin', 'super_admin'].includes(String(user.role || '').toLowerCase())
+      );
 
-      // Students
-      if (studentsRes.status === "fulfilled" && studentsRes.value) {
-        const raw = studentsRes.value.data?.students ?? studentsRes.value.data ?? studentsRes.value;
-        setStudents(safeArray(raw));
-        pushDebug("GET /students", { ok: true, count: safeArray(raw).length });
-      } else {
-        setStudents([]);
-        pushDebug("GET /students", { ok: false });
-      }
+      const enrichedCourses = await Promise.all(
+        safeArray(baseCourses).map(async (course) => {
+          const courseId = getEntityId(course);
+          if (!courseId) return course;
 
-      // Faculties
-      if (facultiesRes.status === "fulfilled" && facultiesRes.value) {
-        const raw = facultiesRes.value.data?.faculties ?? facultiesRes.value.data ?? facultiesRes.value;
-        setFaculties(safeArray(raw));
-        pushDebug("GET /faculties", { ok: true, count: safeArray(raw).length });
-      } else {
-        setFaculties([]);
-        pushDebug("GET /faculties", { ok: false });
-      }
+          try {
+            const [courseWithFacultiesRes, studentsByCourseRes] = await Promise.all([
+              axios.get(getCourseWithFacultiesUrl(courseId), { headers }),
+              axios.get(getStudentsByCourseUrl(courseId), { headers })
+            ]);
 
-    } catch (err) {
-      setLoadingError(err.message || "Unexpected error");
+            const courseWithFaculties =
+              courseWithFacultiesRes.data?.course ||
+              courseWithFacultiesRes.data?.data ||
+              courseWithFacultiesRes.data ||
+              {};
+
+            const studentsByCourse = getResponseData(studentsByCourseRes.data, ['students', 'data']);
+
+            return {
+              ...course,
+              ...courseWithFaculties,
+              Faculties: safeArray(courseWithFaculties.Faculties || courseWithFaculties.faculties),
+              CourseStudents: safeArray(studentsByCourse)
+            };
+          } catch (error) {
+            pushDebug(`GET /courses/${courseId}/details`, {
+              ok: false,
+              error: getRequestErrorMessage(error)
+            });
+
+            return {
+              ...course,
+              Faculties: safeArray(course.Faculties || course.faculties),
+              CourseStudents: safeArray(course.CourseStudents || course.students)
+            };
+          }
+        })
+      );
+
+      setAdmins(adminsOnly);
+      setCourses(enrichedCourses);
+      setStudents(safeArray(allStudents));
+      setFaculties(safeArray(allFaculties));
+
+      pushDebug('GET /users/all-users', { ok: true, count: adminsOnly.length });
+      pushDebug('GET /courses/get-all-courses', { ok: true, count: enrichedCourses.length });
+      pushDebug('GET /students/get-all-students', { ok: true, count: safeArray(allStudents).length });
+      pushDebug('GET /users/faculties', { ok: true, count: safeArray(allFaculties).length });
+    } catch (error) {
+      const message = getRequestErrorMessage(error);
+      setLoadingError(message);
+      pushDebug('FETCH admin dashboard data', { ok: false, error: message });
+      setAdmins([]);
+      setCourses([]);
+      setStudents([]);
+      setFaculties([]);
     } finally {
       setLoading(false);
     }
   }, [pushDebug]);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
 
   const handleAdd = useCallback(async () => {
-    setAddError(""); setSuccessMsg("");
+    setAddError('');
+    setSuccessMsg('');
+
     if (!form.name || !form.email || !form.phone || !form.password) {
-      setAddError("All fields are required.");
+      setAddError('All fields are required.');
       return;
     }
+
     setAdding(true);
     try {
-      const headers = getAuthHeaders();
-      await axios.post(`${API_USERS}/create-admin`, form, { headers });
-      setSuccessMsg("Admin created successfully.");
-      pushDebug("POST /users/create-admin", { ok: true });
-      setForm({ name: "", email: "", phone: "", password: "" });
+      await axios.post(`${API_USERS}/create-admin`, form, { headers: getAuthHeaders() });
+      setSuccessMsg('Admin created successfully.');
+      pushDebug('POST /users/create-admin', { ok: true });
+      setForm({ name: '', email: '', phone: '', password: '' });
       await fetchAll();
-    } catch (err) {
-      setAddError(err.response?.data?.message || err.message || "Failed to create admin");
-      pushDebug("POST /users/create-admin", { ok: false, error: err.message });
+    } catch (error) {
+      const message = getRequestErrorMessage(error);
+      setAddError(message);
+      pushDebug('POST /users/create-admin', { ok: false, error: message });
     } finally {
       setAdding(false);
     }
-  }, [form, fetchAll, pushDebug]);
+  }, [fetchAll, form, pushDebug]);
 
-  const exportCSV = (rows, filename = "export.csv") => {
+  const exportCSV = (rows, filename = 'export.csv') => {
     try {
-      const csv = rows.map(r => r.map(c => `"${(c ?? "").toString().replace(/"/g, '""')}"`).join(",")).join("\n");
-      const blob = new Blob([csv], { type: "text/csv" });
+      const csv = rows
+        .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+        .join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = filename;
-      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error(e);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      pushDebug('EXPORT admins csv', { ok: false, error: String(error?.message || error) });
     }
   };
 
   const courseCounts = useMemo(() => {
     const map = {};
-    // Initialize map with courses
-    courses.forEach(c => {
-      const id = c.id ?? c._id ?? c.courseId ?? c.course_id ?? c.course_code ?? c.code ?? c.name;
-      if (id) map[String(id)] = { course: c, students: 0, faculties: 0, id: String(id) };
+
+    courses.forEach((course) => {
+      const id = getEntityId(course);
+      if (!id) return;
+
+      map[String(id)] = {
+        id: String(id),
+        course,
+        students: safeArray(course.CourseStudents).length,
+        faculties: safeArray(course.Faculties).length
+      };
     });
 
-    // Count students
-    students.forEach(s => {
-      const ids = [s.courseId, s.course_id, s.course];
-      ids.forEach(i => { if (i && map[String(i)]) map[String(i)].students++; });
-
-      const arr = s.courses ?? s.Courses ?? s.enrolledCourses ?? s.student_courses;
-      if (Array.isArray(arr)) {
-        arr.forEach(cc => {
-          const cid = cc?.id ?? cc?._id ?? cc?.courseId ?? cc?.course_id ?? cc?.course_code ?? cc?.code;
-          if (cid && map[String(cid)]) map[String(cid)].students++;
-        });
-      }
+    students.forEach((student) => {
+      const relatedIds = [student.courseId, student.course_id, student.course];
+      relatedIds.forEach((courseId) => {
+        if (courseId && map[String(courseId)] && map[String(courseId)].students === 0) {
+          map[String(courseId)].students += 1;
+        }
+      });
     });
 
-    // Count faculties
-    faculties.forEach(f => {
-      const ids = [f.courseId, f.course_id, f.course];
-      ids.forEach(i => { if (i && map[String(i)]) map[String(i)].faculties++; });
-
-      const arr = f.courses ?? f.Courses ?? f.assignedCourses ?? f.faculty_courses;
-      if (Array.isArray(arr)) {
-        arr.forEach(cc => {
-          const cid = cc?.id ?? cc?._id ?? cc?.courseId ?? cc?.course_id ?? cc?.course_code ?? cc?.code;
-          if (cid && map[String(cid)]) map[String(cid)].faculties++;
-        });
-      }
+    faculties.forEach((faculty) => {
+      const relatedIds = [faculty.courseId, faculty.course_id, faculty.course];
+      relatedIds.forEach((courseId) => {
+        if (courseId && map[String(courseId)] && map[String(courseId)].faculties === 0) {
+          map[String(courseId)].faculties += 1;
+        }
+      });
     });
 
     return map;
   }, [courses, students, faculties]);
 
   const topCourses = useMemo(() => {
-    const arr = Object.values(courseCounts).map(it => ({
-      id: it.id,
-      name: it.course?.name ?? it.course?.course_name ?? it.id,
-      students: it.students || 0,
-      faculties: it.faculties || 0
+    const items = Object.values(courseCounts).map((entry) => ({
+      id: entry.id,
+      name: entry.course?.name || entry.course?.course_name || entry.id,
+      students: entry.students || 0,
+      faculties: entry.faculties || 0
     }));
-    arr.sort((a, b) => b.students - a.students);
-    return arr.slice(0, 8);
+
+    items.sort((first, second) => second.students - first.students || second.faculties - first.faculties);
+    return items.slice(0, 8);
   }, [courseCounts]);
+
+  const maxStudents = useMemo(
+    () => Math.max(1, ...topCourses.map((course) => course.students || 0)),
+    [topCourses]
+  );
 
   return (
     <AdminLayout>
-      <div className="fixed inset-0 overflow-y-auto pt-16 bg-gradient-to-br from-indigo-50 to-purple-50">
+      <div className="fixed inset-0 overflow-y-auto bg-gradient-to-br from-indigo-50 via-white to-cyan-50 pt-16">
         <div className="min-h-full p-4 md:p-8">
-
-          {/* Main Header Card */}
-          <div className="bg-white rounded-3xl shadow-xl border border-white/50 overflow-hidden mb-8 relative">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r bg-indigo-600" />
-            <div className="p-6 md:p-8 flex flex-col md:flex-row items-center gap-6 relative z-10">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-700 flex items-center justify-center text-white shadow-lg transform transition-transform">
-                <LayoutDashboard size={40} />
+          <div className="relative mb-8 overflow-hidden rounded-3xl border border-white/60 bg-white shadow-xl">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-500 via-cyan-500 to-emerald-500" />
+            <div className="flex flex-col gap-6 p-6 md:flex-row md:items-center md:p-8">
+              <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-indigo-600 to-cyan-600 text-white shadow-lg">
+                <LayoutDashboard size={38} />
               </div>
-              <div className="flex-1 text-center md:text-left">
-                <h1 className="text-3xl font-black text-slate-800 tracking-tight mb-2">Admin Dashboard</h1>
-                <p className="text-slate-500 font-medium text-lg">System analytics & administrator management</p>
+              <div className="flex-1">
+                <h1 className="text-3xl font-black tracking-tight text-slate-800">Admin Dashboard</h1>
+                <p className="mt-2 text-slate-500">Administrator management, course insights, and live data checks.</p>
               </div>
               <div className="flex gap-3">
                 <button
-                  onClick={() => exportCSV([["Name", "Email", "Phone", "Created"], ...(admins.map(a => [a.name || "", a.email || "", a.phone || "", a.createdAt || ""]))], `admins_${new Date().toISOString().slice(0, 10)}.csv`)}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 hover:text-indigo-600 transition-all shadow-sm"
+                  onClick={() =>
+                    exportCSV(
+                      [['Name', 'Email', 'Phone', 'Role', 'Created'], ...admins.map((admin) => [
+                        admin.name || '',
+                        admin.email || '',
+                        admin.phone || '',
+                        admin.role || '',
+                        getCreatedDate(admin)
+                      ])],
+                      `admins_${new Date().toISOString().slice(0, 10)}.csv`
+                    )
+                  }
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
                 >
-                  <Download size={18} />
-                  <span className="hidden md:inline">Export CSV</span>
+                  <Download size={16} />
+                  Export CSV
                 </button>
                 <button
                   onClick={fetchAll}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 hover:shadow-lg hover:-translate-y-0.5 transition-all shadow-md"
+                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white shadow-md transition hover:bg-indigo-700"
                 >
-                  <RefreshCw size={18} />
-                  <span className="hidden md:inline">Refresh</span>
+                  <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                  Refresh
                 </button>
               </div>
             </div>
           </div>
 
           {loadingError && (
-            <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm">
-              <strong>Error loading data:</strong> {loadingError}
+            <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+              {loadingError}
             </div>
           )}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-            {/* LEFT COLUMN */}
-            <div className="lg:col-span-4 space-y-8">
-
-              {/* Create Admin Form */}
-              <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden">
-                <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
+            <div className="space-y-8 lg:col-span-4">
+              <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-lg">
+                <div className="border-b border-slate-100 bg-slate-50/80 p-6">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
                       <Shield size={20} />
                     </div>
                     <div>
-                      <h2 className="font-bold text-lg text-slate-800">Create Admin</h2>
-                      <p className="text-xs text-slate-500 font-medium">Add new administrator access</p>
+                      <h2 className="text-lg font-bold text-slate-800">Create Admin</h2>
+                      <p className="text-xs font-medium text-slate-500">Add new admin access</p>
                     </div>
                   </div>
                 </div>
 
-                <form
-                  className="p-6 space-y-4"
-                  autoComplete="off"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleAdd();
-                  }}
-                >
+                <div className="space-y-4 p-6">
                   {addError && (
-                    <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-sm font-medium">
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-medium text-rose-700">
                       {addError}
                     </div>
                   )}
                   {successMsg && (
-                    <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-sm font-medium">
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-700">
                       {successMsg}
                     </div>
                   )}
 
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">Full Name</label>
-                      <div className="relative">
-                        <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                        <input
-                          id="create-admin-name"
-                          name="createAdminName"
-                          type="text"
-                          autoComplete="off"
-                          value={form.name}
-                          onChange={e => setForm({ ...form, name: e.target.value })}
-                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium text-slate-700 transition-all"
-                          placeholder="John Admin"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">Email Address</label>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                        <input
-                          id="create-admin-email"
-                          name="createAdminEmail"
-                          type="email"
-                          autoComplete="off"
-                          value={form.email}
-                          onChange={e => setForm({ ...form, email: e.target.value })}
-                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium text-slate-700 transition-all"
-                          placeholder="admin@example.com"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">Phone</label>
-                      <div className="relative">
-                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                        <input
-                          id="create-admin-phone"
-                          name="createAdminPhone"
-                          type="text"
-                          autoComplete="tel"
-                          inputMode="tel"
-                          value={form.phone}
-                          onChange={e => setForm({ ...form, phone: e.target.value })}
-                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium text-slate-700 transition-all"
-                          placeholder="+1 234 567 890"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">Password</label>
-                      <div className="relative">
-                        <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                        <input
-                          id="create-admin-password"
-                          name="createAdminPassword"
-                          type="password"
-                          autoComplete="new-password"
-                          value={form.password}
-                          onChange={e => setForm({ ...form, password: e.target.value })}
-                          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium text-slate-700 transition-all"
-                          placeholder="••••••••"
-                        />
-                      </div>
+                  <div>
+                    <label className="mb-1.5 ml-1 block text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+                      Full Name
+                    </label>
+                    <div className="relative">
+                      <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <input
+                        type="text"
+                        value={form.name}
+                        onChange={(event) => setForm({ ...form, name: event.target.value })}
+                        placeholder="John Admin"
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                      />
                     </div>
                   </div>
 
-                  <div className="pt-4 flex gap-3">
+                  <div>
+                    <label className="mb-1.5 ml-1 block text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+                      Email
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <input
+                        type="email"
+                        value={form.email}
+                        onChange={(event) => setForm({ ...form, email: event.target.value })}
+                        placeholder="admin@example.com"
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 ml-1 block text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+                      Phone
+                    </label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <input
+                        type="text"
+                        value={form.phone}
+                        onChange={(event) => setForm({ ...form, phone: event.target.value })}
+                        placeholder="+91 9876543210"
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 ml-1 block text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+                      Password
+                    </label>
+                    <div className="relative">
+                      <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <input
+                        type="password"
+                        value={form.password}
+                        onChange={(event) => setForm({ ...form, password: event.target.value })}
+                        placeholder="••••••••"
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
                     <button
-                      type="button"
-                      onClick={() => setForm({ name: "", email: "", phone: "", password: "" })}
-                      className="flex-1 py-2.5 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl hover:bg-slate-50 transition-colors"
+                      onClick={() => setForm({ name: '', email: '', phone: '', password: '' })}
+                      className="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 font-bold text-slate-600 transition hover:bg-slate-50"
                     >
                       Clear
                     </button>
                     <button
-                      type="submit"
+                      onClick={handleAdd}
                       disabled={adding}
-                      className="flex-[2] py-2.5 bg-gradient-to-r bg-indigo-600 text-slate-600 font-bold rounded-xl hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="flex flex-[2] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-600 py-2.5 font-bold text-white transition hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {adding ? <RefreshCw className="animate-spin" size={18} /> : <Plus size={18} />}
+                      {adding ? <RefreshCw size={18} className="animate-spin" /> : <Plus size={18} />}
                       Create Admin
                     </button>
                   </div>
-                </form>
+                </div>
               </div>
 
-              {/* System Overview KPIs */}
-              <div className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6">
-                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+              <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-lg">
+                <h3 className="mb-6 flex items-center gap-2 text-lg font-bold text-slate-800">
                   <Activity size={20} className="text-indigo-500" />
                   System Overview
                 </h3>
+
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2 bg-gradient-to-br from-indigo-50 to-purple-50 p-4 rounded-2xl border border-indigo-100">
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                  <div className="col-span-2 rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-cyan-50 p-4">
+                    <div className="mb-2 flex items-center gap-3">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600">
                         <School size={18} />
                       </div>
-                      <span className="text-xs font-bold text-indigo-800 uppercase tracking-wider">Total Courses</span>
+                      <span className="text-xs font-bold uppercase tracking-[0.16em] text-indigo-800">Total Courses</span>
                     </div>
                     <div className="text-3xl font-black text-slate-800">{courses.length}</div>
                   </div>
-                  <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
-                    <div className="text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1">Students</div>
-                    <div className="text-2xl font-black text-emerald-600">{students.length}</div>
+
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                    <div className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-800">Students</div>
+                    <div className="mt-1 text-2xl font-black text-emerald-600">{students.length}</div>
                   </div>
-                  <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
-                    <div className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-1">Faculties</div>
-                    <div className="text-2xl font-black text-amber-600">{faculties.length}</div>
+
+                  <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+                    <div className="text-xs font-bold uppercase tracking-[0.16em] text-amber-800">Faculties</div>
+                    <div className="mt-1 text-2xl font-black text-amber-600">{faculties.length}</div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* RIGHT COLUMN */}
-            <div className="lg:col-span-8 space-y-8">
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Top Courses */}
-                <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden flex flex-col">
-                  <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-                    <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                      <GraduationCap className="text-purple-500" size={20} />
+            <div className="space-y-8 lg:col-span-8">
+              <div className="grid grid-cols-1 gap-8 xl:grid-cols-2">
+                <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-lg">
+                  <div className="border-b border-slate-100 bg-slate-50/80 p-6">
+                    <h3 className="flex items-center gap-2 text-lg font-bold text-slate-800">
+                      <GraduationCap size={20} className="text-violet-500" />
                       Top Courses
                     </h3>
                   </div>
-                  <div className="p-4 flex-1 overflow-y-auto max-h-[400px] custom-scrollbar space-y-3">
+
+                  <div className="max-h-[420px] space-y-3 overflow-y-auto p-4">
                     {loading ? (
-                      <div className="flex justify-center py-10"><RefreshCw className="animate-spin text-slate-300" /></div>
+                      <div className="flex justify-center py-12">
+                        <RefreshCw className="animate-spin text-slate-300" />
+                      </div>
                     ) : topCourses.length === 0 ? (
-                      <div className="text-center py-8 text-slate-400">No data available</div>
+                      <div className="py-10 text-center text-slate-400">No course data available</div>
                     ) : (
-                      topCourses.map((c, i) => (
-                        <div key={i} className="flex items-center gap-4 p-3 rounded-xl bg-slate-50 border border-slate-100 hover:border-indigo-200 transition-colors group">
-                          <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center font-bold text-indigo-600 text-sm shadow-sm">
-                            {c.name.substring(0, 2).toUpperCase()}
+                      topCourses.map((course) => (
+                        <div
+                          key={course.id}
+                          className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4 transition hover:border-indigo-200"
+                        >
+                          <div className="mb-3 flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <h4 className="truncate text-sm font-black text-slate-800">{course.name}</h4>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {course.faculties} faculties assigned
+                              </p>
+                            </div>
+                            <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-bold text-indigo-700">
+                              {course.students} students
+                            </span>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-center mb-1">
-                              <h4 className="font-bold text-slate-700 truncate text-sm">{c.name}</h4>
-                              <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-700">{c.students} Students</span>
-                            </div>
-                            <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full"
-                                style={{ width: `${Math.min(100, (c.students / (Math.max(...topCourses.map(x => x.students)) || 1)) * 100)}%` }}
-                              />
-                            </div>
-                            <div className="mt-1 flex justify-between text-[10px] text-slate-400 font-medium">
-                              {c.faculties} Faculties
-                            </div>
+
+                          <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500"
+                              style={{ width: `${Math.min(100, (course.students / maxStudents) * 100)}%` }}
+                            />
                           </div>
                         </div>
                       ))
@@ -431,42 +505,47 @@ export default function AddAdmin() {
                   </div>
                 </div>
 
-                {/* Admins Overview */}
-                <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden flex flex-col">
-                  <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-                    <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                      <Shield className="text-emerald-500" size={20} />
+                <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-lg">
+                  <div className="border-b border-slate-100 bg-slate-50/80 p-6">
+                    <h3 className="flex items-center gap-2 text-lg font-bold text-slate-800">
+                      <UserCog size={20} className="text-emerald-500" />
                       Admin List
                     </h3>
                   </div>
-                  <div className="p-4 flex-1 overflow-y-auto max-h-[400px] custom-scrollbar">
+
+                  <div className="max-h-[420px] overflow-y-auto p-4">
                     {admins.length === 0 ? (
-                      <div className="text-center py-8 text-slate-400">No admins found</div>
+                      <div className="py-10 text-center text-slate-400">No admin users found</div>
                     ) : (
-                      <table className="w-full text-sm text-left">
-                        <thead className="text-xs text-slate-400 font-bold uppercase border-b border-slate-100">
+                      <table className="w-full text-left text-sm">
+                        <thead className="border-b border-slate-100 text-xs uppercase text-slate-400">
                           <tr>
                             <th className="pb-3 pl-2">Name</th>
                             <th className="pb-3">Contact</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {admins.map((a, i) => (
-                            <tr key={i} className="group">
+                          {admins.map((admin) => (
+                            <tr key={admin.id}>
                               <td className="py-3 pl-2">
                                 <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold">
-                                    {(a.name || "A")[0]}
+                                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
+                                    {(admin.name || 'A').slice(0, 1).toUpperCase()}
                                   </div>
                                   <div>
-                                    <div className="font-bold text-slate-700">{a.name}</div>
-                                    <div className="text-[10px] text-slate-400">{new Date(a.createdAt).toLocaleDateString()}</div>
+                                    <div className="font-bold text-slate-700">{admin.name || 'Unnamed admin'}</div>
+                                    <div className="text-[11px] text-slate-400">
+                                      {new Date(getCreatedDate(admin) || Date.now()).toLocaleDateString()}
+                                    </div>
                                   </div>
                                 </div>
                               </td>
                               <td className="py-3">
-                                <div className="text-xs text-slate-500 font-medium">{a.email}</div>
-                                <div className="text-[10px] text-slate-400">{a.phone}</div>
+                                <div className="text-xs font-medium text-slate-500">{admin.email || 'No email'}</div>
+                                <div className="text-[11px] text-slate-400">{admin.phone || 'No phone'}</div>
+                                <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-600">
+                                  {String(admin.role || 'admin').replace(/_/g, ' ')}
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -477,32 +556,33 @@ export default function AddAdmin() {
                 </div>
               </div>
 
-              {/* System Logs */}
-              <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden">
-                <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                  <h3 className="font-bold text-sm text-slate-700 flex items-center gap-2">
+              <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-lg">
+                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/80 px-4 py-4">
+                  <h3 className="flex items-center gap-2 text-sm font-bold text-slate-700">
                     <Terminal size={16} className="text-slate-400" />
                     System Logs
                   </h3>
-                  <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded font-mono">
+                  <span className="rounded bg-slate-200 px-2 py-0.5 font-mono text-[10px] text-slate-600">
                     {debugLogs.length} events
                   </span>
                 </div>
-                <div className="bg-slate-900 text-slate-300 p-4 font-mono text-xs max-h-[200px] overflow-y-auto custom-scrollbar">
+
+                <div className="max-h-[220px] overflow-y-auto bg-slate-950 p-4 font-mono text-xs text-slate-300">
                   {debugLogs.length === 0 ? (
-                    <div className="text-slate-600 italic">No logs generated yet...</div>
-                  ) : debugLogs.map((log, i) => (
-                    <div key={i} className="mb-1.5 border-b border-slate-800/50 pb-1.5 last:border-0 last:mb-0 last:pb-0">
-                      <span className="text-emerald-500 mr-2">[{log.ts}]</span>
-                      <span className="text-indigo-400 font-bold mr-2">{log.label}</span>
-                      <span className="text-slate-400">
-                        {typeof log.payload === 'object' ? JSON.stringify(log.payload) : log.payload}
-                      </span>
-                    </div>
-                  ))}
+                    <div className="italic text-slate-500">No logs generated yet...</div>
+                  ) : (
+                    debugLogs.map((log, index) => (
+                      <div key={`${log.ts}-${index}`} className="mb-2 border-b border-slate-800/70 pb-2 last:mb-0 last:border-0 last:pb-0">
+                        <span className="mr-2 text-emerald-400">[{log.ts}]</span>
+                        <span className="mr-2 font-bold text-cyan-400">{log.label}</span>
+                        <span className="text-slate-400">
+                          {typeof log.payload === 'object' ? JSON.stringify(log.payload) : String(log.payload)}
+                        </span>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
-
             </div>
           </div>
         </div>

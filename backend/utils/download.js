@@ -2,7 +2,11 @@
 import axios from 'axios';
 
 export async function downloadBatchExport(batchId, token) {
+<<<<<<< HEAD
   const url = `http://localhost:3000/api/excelexports/batches/${batchId}/export`;
+=======
+  const url = `http://localhost:4000/api/excelexports/batches/${batchId}/export`;
+>>>>>>> 343178b7f90d93b13eb5cbb245ceec9bec747d91
   const res = await axios.get(url, {
     headers: { Authorization: token ? `Bearer ${token}` : undefined },
     responseType: 'blob'
@@ -21,7 +25,11 @@ export async function downloadBatchExport(batchId, token) {
 }
 
 export async function downloadSubBatchExport(subbatchId, token) {
+<<<<<<< HEAD
   const url = `http://localhost:3000/api/excelexports/subbatches/${subbatchId}/export`;
+=======
+  const url = `http://localhost:4000/api/excelexports/subbatches/${subbatchId}/export`;
+>>>>>>> 343178b7f90d93b13eb5cbb245ceec9bec747d91
   const res = await axios.get(url, {
     headers: { Authorization: token ? `Bearer ${token}` : undefined },
     responseType: 'blob'

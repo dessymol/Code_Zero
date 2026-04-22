@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { clearSession, setSession } from '../utils/auth';
 import AuthShell from '../components/AuthShell';
 
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:4000';
+
 const AdminLogin = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -11,8 +13,8 @@ const AdminLogin = () => {
   const [error, setError] = useState('');
 
   const navigate = useNavigate();
-  const API_USER_LOGIN = 'http://localhost:3000/api/v1/users/login';
-  const API_STUDENT_LOGIN = 'http://localhost:3000/api/students/login';
+  const API_USER_LOGIN = `${API_ORIGIN}/api/v1/users/login`;
+  const API_STUDENT_LOGIN = `${API_ORIGIN}/api/students/login`;
 
   const redirectByRole = (role) => {
     if (role === 'super_admin') return '/super-admin/dashboard';
@@ -20,6 +22,13 @@ const AdminLogin = () => {
     if (role === 'faculty') return '/faculty/dashboard';
     if (role === 'student') return '/student/dashboard';
     return '/';
+  };
+
+  const normalizeRole = (role) => String(role || '').trim().toLowerCase();
+
+  const shouldTryStudentLogin = (err) => {
+    const status = err?.response?.status;
+    return status === 401 || status === 404;
   };
 
   const handleLogin = async (e) => {
@@ -37,18 +46,22 @@ const AdminLogin = () => {
         const response = await axios.post(API_USER_LOGIN, payload);
         token = response?.data?.token;
         user = response?.data?.user;
-      } catch {
+      } catch (userErr) {
+        if (!shouldTryStudentLogin(userErr)) {
+          throw userErr;
+        }
         const studentResponse = await axios.post(API_STUDENT_LOGIN, payload);
         token = studentResponse?.data?.token;
         user = studentResponse?.data?.user;
       }
 
-      if (!token || !user?.role) {
+      const role = normalizeRole(user?.role);
+      if (!token || !role) {
         throw new Error('Invalid login response');
       }
 
-      setSession({ token, user });
-      navigate(redirectByRole(user.role));
+      setSession({ token, user: { ...user, role } });
+      navigate(redirectByRole(role));
     } catch (err) {
       setError(err.response?.data?.message || 'Invalid email or password');
       clearSession();

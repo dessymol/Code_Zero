@@ -9,7 +9,7 @@
 //   },
 //   // Alternative: Self-hosted Judge0
 //   selfHosted: {
-//     url: 'http://localhost:3000', // Your Judge0 instance
+//     url: 'http://localhost:4000', // Your Judge0 instance
 //     key: null
 //   }
 // };

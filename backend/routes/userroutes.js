@@ -1,8 +1,10 @@
 const express = require('express');
 const { User } = require('../models'); // Sequelize model
+const { AuditLog } = require('../models');
 const { login , changePassword , getMe, updateMe } = require('../controllers/userController');
 const facultyController = require('../controllers/facultyController');
 const { facultyAuth } = require('../Middleware/authmiddleware');
+const { writeAuditLog } = require('../services/auditLogService');
 
 
 //Faculty functionalities
@@ -16,6 +18,8 @@ const { deleteFaculty } = require('../controllers/facultyController');
 const { authMiddleware, roleMiddleware ,adminAuth } = require('../Middleware/authmiddleware');
 const ApiError = require('../utils/ApiError');
 const bcrypt = require('bcryptjs');
+const { AuditLog, User: UserModel } = require('../models');
+const { writeAuditLog } = require('../services/auditLogService');
 
 const router = express.Router();
 
@@ -57,6 +61,20 @@ router.post('/create-admin', authMiddleware, roleMiddleware('admin'), async (req
       role: 'admin'
     });
 
+    await writeAuditLog({
+      actorUserId: req.user?.id || null,
+      actorRole: req.user?.role || null,
+      action: 'create_admin',
+      targetType: 'user',
+      targetId: newAdmin.id,
+      status: 'success',
+      details: {
+        createdUserRole: newAdmin.role,
+        createdUserEmail: newAdmin.email,
+        createdUserName: newAdmin.name
+      }
+    });
+
     res.status(201).json({
       status: 'success',
       message: 'Admin user created',
@@ -67,6 +85,50 @@ router.post('/create-admin', authMiddleware, roleMiddleware('admin'), async (req
         phone: newAdmin.phone,
         role: newAdmin.role
       }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/audit-logs', authMiddleware, roleMiddleware('admin'), async (req, res, next) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 20, 100);
+    const logs = await AuditLog.findAll({
+      order: [['created_at', 'DESC']],
+      limit
+    });
+
+    res.status(200).json({
+      status: 'success',
+      data: logs
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/audit-logs', authMiddleware, roleMiddleware('admin'), async (req, res, next) => {
+  try {
+    const { action, targetType, targetId, status, details } = req.body || {};
+
+    const log = await writeAuditLog({
+      actorUserId: req.user?.id || null,
+      actorRole: req.user?.role || null,
+      action,
+      targetType,
+      targetId,
+      status: status || 'success',
+      details
+    });
+
+    if (!log) {
+      throw new ApiError(400, 'Unable to create audit log');
+    }
+
+    res.status(201).json({
+      status: 'success',
+      data: log
     });
   } catch (err) {
     next(err);

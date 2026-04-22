@@ -12,10 +12,10 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-const API_USERS = "http://localhost:3000/api/v1/users";
-const API_COURSES = "http://localhost:3000/api/courses";
-const API_STUDENTS = "http://localhost:3000/api/students";
-const API_FACULTIES = "http://localhost:3000/api/v1/users/faculties";
+const API_USERS = "http://localhost:4000/api/v1/users";
+const API_COURSES = "http://localhost:4000/api/courses";
+const API_STUDENTS = "http://localhost:4000/api/students";
+const API_FACULTIES = "http://localhost:4000/api/v1/users/faculties";
 
 const COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#f97316"];
 

@@ -9,8 +9,8 @@ const JUDGE0_API_URL = import.meta.env.VITE_JUDGE0_URL || 'http://localhost:2358
 const RAPIDAPI_KEY = import.meta.env.VITE_RAPIDAPI_KEY || null;
 const RAPIDAPI_HOST = import.meta.env.VITE_RAPIDAPI_HOST || 'judge0-ce.p.rapidapi.com';
 
-// Use your backend URL for submissions
-const BACKEND_API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+// Use your backend URL for submissions (not used for routes here, we keep original hardcoded routes)
+const BACKEND_API_URL = import.meta.env.VITE_API_ORIGIN || import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const JUDGE0_SUBMISSIONS_URL = `${JUDGE0_API_URL}/submissions`;
 const JUDGE0_SUBMISSIONS_BATCH_URL = `${JUDGE0_API_URL}/submissions/batch`;
@@ -20,13 +20,13 @@ const getJudge0Headers = () => {
   const headers = {
     'Content-Type': 'application/json',
   };
-
+  
   // Add RapidAPI headers if using RapidAPI
   if (RAPIDAPI_KEY && JUDGE0_API_URL.includes('rapidapi.com')) {
     headers['X-RapidAPI-Key'] = RAPIDAPI_KEY;
     headers['X-RapidAPI-Host'] = RAPIDAPI_HOST;
   }
-
+  
   return headers;
 };
 
@@ -40,16 +40,16 @@ const ACKS = [
 
 // ✅ Single consistent mapping: DB language_id → Judge0 language_id + display name
 const LANGUAGE_MAPPING = {
-  62: { name: 'Java', judge0Id: 62 },
-  70: { name: 'Python 2', judge0Id: 70 }, // Python 2.7
-  71: { name: 'Python 3', judge0Id: 71 }, // Python 3.8
-  50: { name: 'C', judge0Id: 50 },
-  54: { name: 'C++', judge0Id: 54 },
+  62: { name: 'Java',       judge0Id: 62 },
+  70: { name: 'Python 2',   judge0Id: 70 }, // Python 2.7
+  71: { name: 'Python 3',   judge0Id: 71 }, // Python 3.8
+  50: { name: 'C',          judge0Id: 50 },
+  54: { name: 'C++',        judge0Id: 54 },
   63: { name: 'JavaScript', judge0Id: 63 },
-  51: { name: 'C#', judge0Id: 51 },
-  60: { name: 'Go', judge0Id: 60 },
-  78: { name: 'Kotlin', judge0Id: 78 },
-  68: { name: 'PHP', judge0Id: 68 },
+  51: { name: 'C#',         judge0Id: 51 },
+  60: { name: 'Go',         judge0Id: 60 },
+  78: { name: 'Kotlin',     judge0Id: 78 },
+  68: { name: 'PHP',        judge0Id: 68 },
 };
 
 const findLangName = (id) => {
@@ -79,6 +79,34 @@ const formatJudgeResult = (res = {}, expected = '') => {
   if (compile_output) parts.push(`Compiler Output:\n${compile_output}`);
   if (stderr) parts.push(`Error Output:\n${stderr}`);
 
+  // Normalize outputs for comparison
+  const normalizeOutput = (s = '') => {
+    return String(s || '')
+      .replace(/\r\n/g, '\n')
+      .split('\n')
+      .map(line => line.trim())
+      .join('\n')
+      .trim();
+  };
+
+  const normalizedStdout = normalizeOutput(stdout);
+  const normalizedExpected = normalizeOutput(expected);
+
+  // Determine test result
+  let testResult = '';
+  if (statusId === 3) { // Accepted (successful execution)
+    if (normalizedExpected !== '' && normalizedStdout === normalizedExpected) {
+      testResult = '✅ Test Case PASSED';
+    } else if (normalizedExpected === '') {
+      testResult = '✅ Code executed successfully (no expected output to compare)';
+    } else {
+      testResult = '❌ Test Case FAILED - Output does not match expected result';
+    }
+  } else {
+    testResult = '❌ Test Case FAILED - Code execution error';
+  }
+
+  parts.push(testResult);
   parts.push(`Expected Output:\n${expected || '(no expected output)'}`);
   parts.push(`Actual Output:\n${stdout || '(no output)'}`);
 
@@ -107,7 +135,6 @@ const CodingPage = () => {
   const [codes, setCodes] = useState({});
   const [results, setResults] = useState({});
   const [compiling, setCompiling] = useState({});
-  const [feedback, setFeedback] = useState({});
   const [submittedQuestions, setSubmittedQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState('');
@@ -256,7 +283,7 @@ const CodingPage = () => {
         return false;
       }
 
-      if ((e.ctrlKey || e.metaKey) && ['c', 'v', 'x'].includes(e.key.toLowerCase())) {
+      if ((e.ctrlKey || e.metaKey) && ['c','v','x'].includes(e.key.toLowerCase())) {
         handleViolation(`Copy/Paste/Cut detected: ${e.key}`);
         e.preventDefault();
         return false;
@@ -345,13 +372,13 @@ const CodingPage = () => {
     console.log('🚀 ========== Judge0 Execution Started ==========');
     console.log('📍 Judge0 API URL:', JUDGE0_API_URL);
     console.log('🔑 Using RapidAPI:', JUDGE0_API_URL.includes('rapidapi.com'));
-    console.log('📋 Request Details:', {
-      language_id,
-      source_length: source.length,
+    console.log('📋 Request Details:', { 
+      language_id, 
+      source_length: source.length, 
       stdin_length: stdin.length,
       headers: getJudge0Headers()
     });
-
+    
     try {
       console.log('📤 Step 1: Submitting code to Judge0...');
       console.log('Submitting to Judge0:', { language_id, source_length: source.length, stdin_length: stdin.length });
@@ -375,7 +402,7 @@ const CodingPage = () => {
         cpu_time_limit: submissionData.cpu_time_limit,
         memory_limit: submissionData.memory_limit
       });
-
+      
       const createResponse = await axios.post(JUDGE0_SUBMISSIONS_URL, submissionData, {
         headers: getJudge0Headers(),
         timeout: 10000,
@@ -402,7 +429,7 @@ const CodingPage = () => {
         try {
           const pollUrl = `${JUDGE0_SUBMISSIONS_URL}/${token}`;
           console.log(`🔍 Step 4.${attempts + 1}: Polling attempt ${attempts + 1}/${maxAttempts} - GET ${pollUrl}`);
-
+          
           const resultResponse = await axios.get(pollUrl, {
             headers: getJudge0Headers(),
             timeout: 5000,
@@ -411,7 +438,7 @@ const CodingPage = () => {
           result = resultResponse.data;
           const statusId = result.status?.id || result.status_id;
           const statusDesc = result.status?.description || 'Unknown';
-
+          
           console.log(`📊 Poll attempt ${attempts + 1} response:`, {
             statusId,
             statusDescription: statusDesc,
@@ -516,11 +543,11 @@ const CodingPage = () => {
     console.log('🔌 Testing Judge0 connection...');
     console.log('📍 Testing URL:', `${JUDGE0_API_URL}/languages`);
     console.log('🔑 Headers:', getJudge0Headers());
-
+    
     try {
-      const response = await axios.get(`${JUDGE0_API_URL}/languages`, {
+      const response = await axios.get(`${JUDGE0_API_URL}/languages`, { 
         headers: getJudge0Headers(),
-        timeout: 5000
+        timeout: 5000 
       });
       console.log('✅ Judge0 connection test: SUCCESS');
       console.log('📊 Languages available:', response.data?.length || 0);
@@ -684,7 +711,7 @@ const CodingPage = () => {
       const token = localStorage.getItem('token');
 
       // ✅ Keep your original route exactly
-      const submitResponse = await axios.post(
+      await axios.post(
         `${BACKEND_API_URL}/api/submissions/submit`,
         {
           code,
@@ -700,25 +727,6 @@ const CodingPage = () => {
         { headers: { Authorization: token ? `Bearer ${token}` : '' } }
       );
 
-      const submissionId = submitResponse.data?.submission?.id;
-      if (submissionId) {
-        // Set feedback to loading state
-        setFeedback(prev => ({ ...prev, [qid]: { status: 'loading' } }));
-
-        // Poll once after 5 seconds (Gemini), 15 seconds for local LLM
-        const delay = 5000;
-        setTimeout(async () => {
-          try {
-            const fb = await axios.get(
-              `${BACKEND_API_URL}/api/submissions/${submissionId}/feedback`,
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
-            setFeedback(prev => ({ ...prev, [qid]: fb.data }));
-          } catch {
-            setFeedback(prev => ({ ...prev, [qid]: { status: 'failed' } }));
-          }
-        }, delay);
-      }
       // Mark as submitted
       setSubmittedQuestions(prev => [...new Set([...prev, qid])]);
 
@@ -1160,27 +1168,6 @@ const CodingPage = () => {
                 ? results[currentQuestion.id]
                 : (results[currentQuestion.id] ? results[currentQuestion.id] : 'Output / compiler messages will appear here.')}
             </div>
-
-            {feedback[currentQuestion?.id]?.status === 'loading' && (
-              <div className="mt-3 p-3 rounded border border-gray-200 text-sm text-gray-500">
-                AI feedback generating...
-              </div>
-            )}
-            {feedback[currentQuestion?.id]?.status === 'done' && (
-              <div className="mt-3 p-4 rounded-lg border border-purple-200 bg-purple-50 text-sm">
-                <p className="font-semibold text-purple-800 mb-2">AI Feedback</p>
-                <p>{feedback[currentQuestion.id].summary}</p>
-                {feedback[currentQuestion.id].what_went_wrong && (
-                  <p className="mt-2 text-red-700">⚠ {feedback[currentQuestion.id].what_went_wrong}</p>
-                )}
-                {feedback[currentQuestion.id].hint && (
-                  <p className="mt-2 text-amber-700">💡 {feedback[currentQuestion.id].hint}</p>
-                )}
-                {feedback[currentQuestion.id].positive && (
-                  <p className="mt-2 text-green-700">✓ {feedback[currentQuestion.id].positive}</p>
-                )}
-              </div>
-            )}
 
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <button

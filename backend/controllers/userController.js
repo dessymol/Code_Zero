@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { User } = require('../models');
 const ApiError = require('../utils/ApiError');
 const { Op } = require('sequelize'); 
+const { writeAuditLog } = require('../services/auditLogService');
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 exports.login = async (req, res, next) => {
@@ -37,6 +38,19 @@ exports.login = async (req, res, next) => {
       { expiresIn: '1d' }
     );
 
+    await writeAuditLog({
+      actorUserId: user.id,
+      actorRole: user.role,
+      action: 'user_login',
+      targetType: 'user',
+      targetId: user.id,
+      status: 'success',
+      details: {
+        email: user.email,
+        name: user.name
+      }
+    });
+
     res.status(200).json({
       message: 'Login successful',
       token,
@@ -45,6 +59,18 @@ exports.login = async (req, res, next) => {
         name: user.name,
         email: user.email,
         role: user.role
+      }
+    });
+
+    await writeAuditLog({
+      actorUserId: user.id,
+      actorRole: user.role,
+      action: 'user_login',
+      targetType: 'user',
+      targetId: user.id,
+      status: 'success',
+      details: {
+        email: user.email
       }
     });
   } catch (error) {

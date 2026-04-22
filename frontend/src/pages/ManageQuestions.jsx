@@ -9,11 +9,9 @@ import { useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import FacultyNavbar from './FacultyNavbar';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useToast } from '../context/ToastContext';
 
-const API = 'http://localhost:3000/api';
-const SOCKET_URL = 'http://localhost:3000';
-const MotionDiv = motion.div;
+const API = `${import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000'}/api`;
+const SOCKET_URL = import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000';
 
 const LANGUAGES = [
   { id: 62, name: 'Java', color: '#f89820', icon: '☕' },
@@ -31,14 +29,14 @@ const Modal = ({ isOpen, onClose, title, children, maxWidth = 'max-w-md' }) => {
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <MotionDiv
+        <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
           className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
         />
-        <MotionDiv
+        <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -56,7 +54,7 @@ const Modal = ({ isOpen, onClose, title, children, maxWidth = 'max-w-md' }) => {
           <div className="p-6 overflow-y-auto">
             {children}
           </div>
-        </MotionDiv>
+        </motion.div>
       </div>
     </AnimatePresence>
   );
@@ -83,7 +81,6 @@ const ActionButton = ({ onClick, icon: Icon, label, variant = 'primary', disable
 
 export default function ManageQuestions() {
   const { courseId } = useParams();
-  const toast = useToast();
   const token = localStorage.getItem('token') || '';
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
@@ -98,16 +95,22 @@ export default function ManageQuestions() {
   const [form, setForm] = useState({
     title: '', description: '', sample_input: '', sample_output: '', language_id: LANGUAGES[0].id, score: 100,
   });
+  const [testcases, setTestcases] = useState([{ input: '', output: '', is_public: false }]);
   const [saving, setSaving] = useState(false);
-  const [testcaseDialogOpen, setTestcaseDialogOpen] = useState(false);
-  const [testcaseQuestion, setTestcaseQuestion] = useState(null);
-  const [generatedTestcases, setGeneratedTestcases] = useState([]);
-  const [generatingTestcases, setGeneratingTestcases] = useState(false);
-  const [approvingTestcases, setApprovingTestcases] = useState(false);
 
+  const selectedBatchId = selectedTab === 0 ? null : batches[selectedTab - 1]?.id;
   const chatIndex = batches.length + 1;
 
   // --- Logic Helpers ---
+
+  const getScore = (q) => {
+    if (!q) return null;
+    const candidates = [q.score, q.raw?.score, q.raw?.points, q.raw?.marks];
+    for (const c of candidates) {
+      if (c != null && !isNaN(c)) return Number(c);
+    }
+    return null;
+  };
 
   const fetchAll = async () => {
     setLoading(true);
@@ -134,6 +137,7 @@ export default function ManageQuestions() {
           language_id: r.language_id ?? r.languageId ?? LANGUAGES[0].id,
           language: r.language,
           score: r.score ?? r.points ?? r.marks ?? 100,
+          testcases: Array.isArray(r.Testcases) ? r.Testcases : Array.isArray(r.testcases) ? r.testcases : [],
           raw: r,
           batch_states: q.batch_states || q.batchStates || {}
         };
@@ -177,7 +181,14 @@ export default function ManageQuestions() {
         title: form.title, description: form.description,
         sample_input: form.sample_input, sample_output: form.sample_output,
         language_id: Number(form.language_id), score: Number(form.score),
-        course_id: Number(courseId)
+        course_id: Number(courseId),
+        testcases: testcases
+          .map((testcase) => ({
+            input: testcase.input,
+            output: testcase.output,
+            is_public: Boolean(testcase.is_public)
+          }))
+          .filter((testcase) => testcase.input.trim() || testcase.output.trim())
       };
       if (editing) {
         await axios.put(`${API}/questions/update/${editing}`, payload, { headers });
@@ -187,7 +198,7 @@ export default function ManageQuestions() {
       setOpenDialog(false);
       setEditing(null);
       await fetchAll();
-    } catch { alert('Save failed'); }
+    } catch (e) { alert('Save failed'); }
     finally { setSaving(false); }
   };
 
@@ -197,92 +208,6 @@ export default function ManageQuestions() {
       await axios.delete(`${API}/questions/delete/${id}`, { headers });
       await fetchAll();
     } catch { alert('Delete failed'); }
-  };
-
-  const openTestcaseDialog = async (question) => {
-    setTestcaseQuestion(question);
-    setGeneratedTestcases([]);
-    setTestcaseDialogOpen(true);
-    setGeneratingTestcases(true);
-    try {
-      const res = await axios.post(`${API}/questions/${question.id}/testcases/generate`, {}, { headers });
-      const drafts = Array.isArray(res.data?.testcases) ? res.data.testcases : [];
-      setGeneratedTestcases(
-        drafts.map((tc, index) => ({
-          id: `${Date.now()}_${index}`,
-          input: tc?.input != null ? String(tc.input) : '',
-          output: tc?.output != null ? String(tc.output) : '',
-          is_public: tc?.is_public === true
-        }))
-      );
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to generate test cases');
-      setTestcaseDialogOpen(false);
-      setTestcaseQuestion(null);
-    } finally {
-      setGeneratingTestcases(false);
-    }
-  };
-
-  const updateGeneratedTestcase = (id, field, value) => {
-    setGeneratedTestcases(prev => prev.map(tc => (tc.id === id ? { ...tc, [field]: value } : tc)));
-  };
-
-  const removeGeneratedTestcase = (id) => {
-    setGeneratedTestcases(prev => prev.filter(tc => tc.id !== id));
-  };
-
-  const addGeneratedTestcase = () => {
-    setGeneratedTestcases(prev => [
-      ...prev,
-      { id: `${Date.now()}_${prev.length}`, input: '', output: '', is_public: false }
-    ]);
-  };
-
-  const resetTestcaseDialog = () => {
-    setTestcaseDialogOpen(false);
-    setTestcaseQuestion(null);
-    setGeneratedTestcases([]);
-  };
-
-  const closeTestcaseDialog = () => {
-    if (generatingTestcases || approvingTestcases) return;
-    resetTestcaseDialog();
-  };
-
-  const handleApproveTestcases = async () => {
-    const finalTestcases = generatedTestcases
-      .map(tc => ({
-        input: tc.input.trim(),
-        output: tc.output.trim(),
-        is_public: tc.is_public === true
-      }))
-      .filter(tc => tc.input || tc.output);
-
-    if (finalTestcases.length === 0) {
-      toast.error('Add at least one valid test case before confirming');
-      return;
-    }
-
-    if (finalTestcases.some(tc => tc.input === '' || tc.output === '')) {
-      toast.error('Each test case must include both input and output');
-      return;
-    }
-
-    setApprovingTestcases(true);
-    try {
-      await axios.post(
-        `${API}/questions/${testcaseQuestion.id}/testcases/approve`,
-        { testcases: finalTestcases },
-        { headers }
-      );
-      toast.success('Test cases approved successfully');
-      resetTestcaseDialog();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to approve test cases');
-    } finally {
-      setApprovingTestcases(false);
-    }
   };
 
   // --- Chat Logic ---
@@ -352,7 +277,12 @@ export default function ManageQuestions() {
             <ActionButton
               label="New Question"
               icon={Plus}
-              onClick={() => { setEditing(null); setForm({ title: '', description: '', sample_input: '', sample_output: '', language_id: LANGUAGES[0].id, score: 100 }); setOpenDialog(true); }}
+              onClick={() => {
+                setEditing(null);
+                setForm({ title: '', description: '', sample_input: '', sample_output: '', language_id: LANGUAGES[0].id, score: 100 });
+                setTestcases([{ input: '', output: '', is_public: false }]);
+                setOpenDialog(true);
+              }}
             />
           )}
         </div>
@@ -471,6 +401,12 @@ export default function ManageQuestions() {
                         <code className="block bg-slate-900 text-slate-200 text-xs p-2 rounded-lg mt-1 font-mono truncate">{q.sample_input}</code>
                       </div>
                     )}
+                    {q.testcases?.length > 0 && (
+                      <div className="mt-3 flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
+                        <span>Saved Testcases</span>
+                        <span>{q.testcases.length}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions / Toggle */}
@@ -483,13 +419,24 @@ export default function ManageQuestions() {
                         </div>
                         <div className="flex gap-1">
                           <button
-                            onClick={() => openTestcaseDialog(q)}
-                            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                            title="Generate Test Cases"
+                            onClick={() => {
+                              setEditing(q.id);
+                              setForm({ ...q, language_id: q.language_id });
+                              setTestcases(
+                                Array.isArray(q.testcases) && q.testcases.length
+                                  ? q.testcases.map((testcase) => ({
+                                      input: testcase.input || '',
+                                      output: testcase.output || '',
+                                      is_public: Boolean(testcase.is_public)
+                                    }))
+                                  : [{ input: '', output: '', is_public: false }]
+                              );
+                              setOpenDialog(true);
+                            }}
+                            className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                           >
-                            <FileText size={16} />
+                            <Edit size={16} />
                           </button>
-                          <button onClick={() => { setEditing(q.id); setForm({ ...q, language_id: q.language_id }); setOpenDialog(true); }} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Edit size={16} /></button>
                           <button onClick={() => handleDelete(q.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /></button>
                         </div>
                       </>
@@ -552,99 +499,86 @@ export default function ManageQuestions() {
               <textarea className="w-full px-4 py-2 border rounded-xl outline-none font-mono text-sm bg-slate-50" value={form.sample_output} onChange={e => setForm({ ...form, sample_output: e.target.value })} rows={3} />
             </div>
           </div>
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-            <ActionButton label="Cancel" variant="secondary" onClick={() => setOpenDialog(false)} />
-            <ActionButton label={saving ? "Saving..." : "Save Question"} onClick={handleSave} disabled={saving} />
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
-        isOpen={testcaseDialogOpen}
-        onClose={closeTestcaseDialog}
-        title={testcaseQuestion ? `Generated Test Cases for ${testcaseQuestion.title}` : 'Generated Test Cases'}
-        maxWidth="max-w-5xl"
-      >
-        <div className="space-y-5">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-slate-700">Review the generated cases, edit them if needed, remove unwanted ones, then confirm to save.</p>
-              <p className="text-xs text-slate-500 mt-1">Only the final reviewed array will be sent for approval.</p>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-slate-800">Evaluation Testcases</h4>
+                <p className="text-xs text-slate-500">Student submissions will be run against these cases during final submit.</p>
+              </div>
+              <ActionButton
+                label="Add Testcase"
+                size="small"
+                variant="secondary"
+                onClick={() => setTestcases((prev) => [...prev, { input: '', output: '', is_public: false }])}
+              />
             </div>
-            <ActionButton
-              label="Add Test Case"
-              icon={Plus}
-              variant="secondary"
-              onClick={addGeneratedTestcase}
-              disabled={generatingTestcases || approvingTestcases}
-            />
-          </div>
-
-          {generatingTestcases ? (
-            <div className="py-16 flex flex-col items-center justify-center text-center">
-              <RefreshCw className="animate-spin text-indigo-500 mb-4" size={32} />
-              <p className="text-sm font-semibold text-slate-700">Generating test cases...</p>
-              <p className="text-xs text-slate-500 mt-1">This may take a few seconds.</p>
-            </div>
-          ) : generatedTestcases.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 py-12 text-center">
-              <p className="text-sm font-semibold text-slate-600">No draft test cases available.</p>
-              <p className="text-xs text-slate-500 mt-1">Add one manually or try generating again later.</p>
-            </div>
-          ) : (
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-              {generatedTestcases.map((tc, index) => (
-                <div key={tc.id} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
-                        {index + 1}
-                      </span>
-                      <span className="text-sm font-bold text-slate-700">Test Case</span>
-                    </div>
-                    <button
-                      onClick={() => removeGeneratedTestcase(tc.id)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Remove test case"
-                      disabled={approvingTestcases}
-                    >
-                      <Trash2 size={16} />
-                    </button>
+            <div className="space-y-3">
+              {testcases.map((testcase, index) => (
+                <div key={index} className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wide text-slate-400">Testcase {index + 1}</span>
+                    {testcases.length > 1 && (
+                      <button
+                        onClick={() => setTestcases((prev) => prev.filter((_, testcaseIndex) => testcaseIndex !== index))}
+                        className="text-xs font-bold text-red-500"
+                      >
+                        Remove
+                      </button>
+                    )}
                   </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Input</label>
+                      <label className="mb-1 block text-xs font-bold text-slate-600">Input</label>
                       <textarea
-                        value={tc.input}
-                        onChange={e => updateGeneratedTestcase(tc.id, 'input', e.target.value)}
-                        className="w-full min-h-[140px] rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                        placeholder="Enter testcase input"
+                        className="w-full rounded-xl border px-3 py-2 font-mono text-sm outline-none"
+                        rows={3}
+                        value={testcase.input}
+                        onChange={(e) =>
+                          setTestcases((prev) =>
+                            prev.map((item, testcaseIndex) =>
+                              testcaseIndex === index ? { ...item, input: e.target.value } : item
+                            )
+                          )
+                        }
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Output</label>
+                      <label className="mb-1 block text-xs font-bold text-slate-600">Expected Output</label>
                       <textarea
-                        value={tc.output}
-                        onChange={e => updateGeneratedTestcase(tc.id, 'output', e.target.value)}
-                        className="w-full min-h-[140px] rounded-xl border border-slate-200 bg-white px-4 py-3 font-mono text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                        placeholder="Enter expected output"
+                        className="w-full rounded-xl border px-3 py-2 font-mono text-sm outline-none"
+                        rows={3}
+                        value={testcase.output}
+                        onChange={(e) =>
+                          setTestcases((prev) =>
+                            prev.map((item, testcaseIndex) =>
+                              testcaseIndex === index ? { ...item, output: e.target.value } : item
+                            )
+                          )
+                        }
                       />
                     </div>
                   </div>
+                  <label className="mt-3 flex items-center gap-2 text-xs font-semibold text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(testcase.is_public)}
+                      onChange={(e) =>
+                        setTestcases((prev) =>
+                          prev.map((item, testcaseIndex) =>
+                            testcaseIndex === index ? { ...item, is_public: e.target.checked } : item
+                          )
+                        )
+                      }
+                    />
+                    Visible to students
+                  </label>
                 </div>
               ))}
             </div>
-          )}
-
+          </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-            <ActionButton label="Cancel" variant="secondary" onClick={closeTestcaseDialog} disabled={generatingTestcases || approvingTestcases} />
-            <ActionButton
-              label={approvingTestcases ? 'Confirming...' : 'Confirm Test Cases'}
-              icon={CheckCircle}
-              onClick={handleApproveTestcases}
-              disabled={generatingTestcases || approvingTestcases || generatedTestcases.length === 0}
-            />
+            <ActionButton label="Cancel" variant="secondary" onClick={() => setOpenDialog(false)} />
+            <ActionButton label={saving ? "Saving..." : "Save Question"} onClick={handleSave} disabled={saving} />
           </div>
         </div>
       </Modal>
