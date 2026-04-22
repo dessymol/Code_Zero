@@ -34,8 +34,8 @@ import {
   X
 } from 'lucide-react';
 
-const API_BASE = 'http://localhost:3000/api';
-const API_STUDENTS = 'http://localhost:3000/api/students';
+const API_BASE = 'http://localhost:4000/api';
+const API_STUDENTS = 'http://localhost:4000/api/students';
 
 const COLORS = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
 

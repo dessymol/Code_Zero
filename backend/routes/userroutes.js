@@ -18,6 +18,8 @@ const { deleteFaculty } = require('../controllers/facultyController');
 const { authMiddleware, roleMiddleware ,adminAuth } = require('../Middleware/authmiddleware');
 const ApiError = require('../utils/ApiError');
 const bcrypt = require('bcryptjs');
+const { AuditLog, User: UserModel } = require('../models');
+const { writeAuditLog } = require('../services/auditLogService');
 
 const router = express.Router();
 

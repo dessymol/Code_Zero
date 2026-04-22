@@ -8,8 +8,8 @@ import {
 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 
-const API_SUBMISSIONS = 'http://localhost:3000/api/submissions/mine';
-const API_EXPORT_MY = 'http://localhost:3000/api/export/students/me/submissions/export';
+const API_SUBMISSIONS = 'http://localhost:4000/api/submissions/mine';
+const API_EXPORT_MY = 'http://localhost:4000/api/export/students/me/submissions/export';
 
 const StatusBadge = ({ status }) => {
   const s = (status || '').toLowerCase();

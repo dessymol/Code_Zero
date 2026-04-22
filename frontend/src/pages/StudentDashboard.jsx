@@ -31,7 +31,7 @@ const StudentDashboard = () => {
     try {
       const token = localStorage.getItem('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const resp = await axios.get('http://localhost:3000/api/students/courses-with-exams', { headers });
+      const resp = await axios.get('http://localhost:4000/api/students/courses-with-exams', { headers });
       const list = Array.isArray(resp.data.courses) ? resp.data.courses : [];
       setCourses(list.map(c => ({
         course_id: c.course_id ?? c.id ?? null,

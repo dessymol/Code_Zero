@@ -1,5 +1,9 @@
 // backend/utils/emailTemplates.js
+<<<<<<< HEAD
 const FRONTEND_URL = process.env.FRONTEND_LOGIN_URL || 'http://localhost:5000';
+=======
+const FRONTEND_URL = process.env.FRONTEND_LOGIN_URL || 'http://localhost:4000';
+>>>>>>> 3bbab81 (Updated controllers, routes, frontend pages)
 
 function escapeHtml(s) {
   return String(s || '')

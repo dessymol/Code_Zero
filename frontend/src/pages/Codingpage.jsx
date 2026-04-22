@@ -79,6 +79,34 @@ const formatJudgeResult = (res = {}, expected = '') => {
   if (compile_output) parts.push(`Compiler Output:\n${compile_output}`);
   if (stderr) parts.push(`Error Output:\n${stderr}`);
 
+  // Normalize outputs for comparison
+  const normalizeOutput = (s = '') => {
+    return String(s || '')
+      .replace(/\r\n/g, '\n')
+      .split('\n')
+      .map(line => line.trim())
+      .join('\n')
+      .trim();
+  };
+
+  const normalizedStdout = normalizeOutput(stdout);
+  const normalizedExpected = normalizeOutput(expected);
+
+  // Determine test result
+  let testResult = '';
+  if (statusId === 3) { // Accepted (successful execution)
+    if (normalizedExpected !== '' && normalizedStdout === normalizedExpected) {
+      testResult = '✅ Test Case PASSED';
+    } else if (normalizedExpected === '') {
+      testResult = '✅ Code executed successfully (no expected output to compare)';
+    } else {
+      testResult = '❌ Test Case FAILED - Output does not match expected result';
+    }
+  } else {
+    testResult = '❌ Test Case FAILED - Code execution error';
+  }
+
+  parts.push(testResult);
   parts.push(`Expected Output:\n${expected || '(no expected output)'}`);
   parts.push(`Actual Output:\n${stdout || '(no output)'}`);
 

@@ -8,8 +8,8 @@ import { io } from 'socket.io-client';
 import { useParams } from 'react-router-dom';
 import AdminLayout from './AdminLayout';
 
-const API_BASE = 'http://localhost:3000';
-const SOCKET_URL = 'http://localhost:3000';
+const API_BASE = 'http://localhost:4000';
+const SOCKET_URL = 'http://localhost:4000';
 
 export default function ChatRoom() {
   const { courseId: urlCourseId } = useParams();

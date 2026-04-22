@@ -24,7 +24,6 @@ const API_ALL_USERS = `${API_USERS}/all-users`;
 const API_COURSES = `${API_ORIGIN}/api/courses`;
 const API_STUDENTS = `${API_ORIGIN}/api/students`;
 const API_FACULTIES = `${API_USERS}/faculties`;
-
 const getCourseWithFacultiesUrl = (courseId) => `${API_COURSES}/${courseId}/with-faculties`;
 const getStudentsByCourseUrl = (courseId) => `${API_STUDENTS}/by-course/${courseId}`;
 
@@ -54,6 +53,16 @@ const getCreatedDate = (item) => item?.createdAt || item?.created_at || item?.cr
 
 const getEntityId = (item) =>
   item?.id ?? item?._id ?? item?.courseId ?? item?.course_id ?? item?.course_code ?? item?.code ?? item?.name;
+
+const getResponseData = (response) => response?.data?.data ?? response?.data ?? null;
+
+const getRequestErrorMessage = (error, fallback) =>
+  error?.response?.data?.message || error?.message || fallback;
+
+const getCreatedDate = (item) => item?.createdAt || item?.created_at || item?.updatedAt || item?.updated_at || null;
+
+const getEntityId = (item) =>
+  item?.id ?? item?._id ?? item?.courseId ?? item?.course_id ?? item?.course_code ?? item?.code ?? null;
 
 export default function AddAdmin() {
   const [admins, setAdmins] = useState([]);

@@ -7,7 +7,7 @@ import axios from 'axios';
 import { clearSession } from './utils/auth';
 import './index.css'; // Tailwind CSS or your styling
 
-const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000';
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:4000';
 
 axios.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');

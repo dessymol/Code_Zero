@@ -61,6 +61,18 @@ exports.login = async (req, res, next) => {
         role: user.role
       }
     });
+
+    await writeAuditLog({
+      actorUserId: user.id,
+      actorRole: user.role,
+      action: 'user_login',
+      targetType: 'user',
+      targetId: user.id,
+      status: 'success',
+      details: {
+        email: user.email
+      }
+    });
   } catch (error) {
     next(error);
   }
