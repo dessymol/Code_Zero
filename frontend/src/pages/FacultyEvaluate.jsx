@@ -9,13 +9,37 @@ import axios from 'axios';
 import FacultyNavbar from './FacultyNavbar';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const API = 'http://localhost:3000/api';
+const API = `${import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000'}/api`;
 
 const formatDateKey = (iso) => {
   if (!iso) return 'Unknown Date';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return 'Unknown Date';
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+};
+
+const formatDateTime = (value) => {
+  if (!value) return 'Unknown time';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown time';
+  return date.toLocaleString();
+};
+
+const parseSubmissionOutput = (output) => {
+  if (!output) return '';
+  if (typeof output !== 'string') {
+    return JSON.stringify(output, null, 2);
+  }
+
+  try {
+    const parsed = JSON.parse(output);
+    if (parsed?.stdout) return String(parsed.stdout);
+    if (parsed?.stderr) return String(parsed.stderr);
+    if (parsed?.compile_output) return String(parsed.compile_output);
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return output;
+  }
 };
 
 // --- Reusable Components ---
@@ -83,6 +107,7 @@ export default function FacultyEvaluate() {
   const [scoreBatch, setScoreBatch] = useState(null);
   const [scoreRows, setScoreRows] = useState([]);
   const [scoreLoading, setScoreLoading] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
 
   useEffect(() => {
     if (courseId) fetchBatchesAndSubmissions();
@@ -185,6 +210,14 @@ export default function FacultyEvaluate() {
     } finally {
       setScoreLoading(false);
     }
+  };
+
+  const openSubmissionViewer = (submission) => {
+    setSelectedSubmission(submission);
+  };
+
+  const closeSubmissionViewer = () => {
+    setSelectedSubmission(null);
   };
 
   return (
@@ -315,10 +348,23 @@ export default function FacultyEvaluate() {
                               <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Output</div>
                             </div>
                             <pre className="text-xs text-emerald-400 font-mono overflow-x-auto custom-scrollbar max-h-24">
-                              {s.output}
+                              {parseSubmissionOutput(s.output)}
                             </pre>
                           </div>
                         )}
+
+                        <div className="mt-3 flex items-center justify-between gap-3">
+                          <p className="text-[11px] text-slate-400">
+                            Submitted: {formatDateTime(s.createdAt)}
+                          </p>
+                          <button
+                            onClick={() => openSubmissionViewer(s)}
+                            className="inline-flex items-center gap-2 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100"
+                          >
+                            <Code size={14} />
+                            View Submitted Code
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -358,6 +404,64 @@ export default function FacultyEvaluate() {
               )}
             </tbody>
           </table>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(selectedSubmission)}
+        onClose={closeSubmissionViewer}
+        title={selectedSubmission ? `Submission: ${selectedSubmission.question_title || 'Code Review'}` : 'Submission'}
+      >
+        {selectedSubmission && (
+          <div className="space-y-5 p-6">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Student</p>
+                <p className="mt-2 text-sm font-bold text-slate-800">{selectedSubmission.student_name || 'Unknown'}</p>
+                <p className="mt-1 text-xs text-slate-500">{selectedSubmission.student_email || 'No email'}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Submission Details</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <StatusBadge status={selectedSubmission.status} />
+                  <ScoreBadge score={selectedSubmission.score} />
+                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">
+                    Lang: {selectedSubmission.language_id || 'N/A'}
+                  </span>
+                </div>
+                <p className="mt-3 text-xs text-slate-500">
+                  Submitted on {formatDateTime(selectedSubmission.createdAt)}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Question</p>
+              <p className="mt-2 text-sm font-bold text-slate-800">
+                {selectedSubmission.question_title || 'Untitled question'}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-950 p-4">
+              <div className="mb-3 flex items-center gap-2 text-slate-200">
+                <Code size={16} />
+                <p className="text-sm font-bold">Submitted Code</p>
+              </div>
+              <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-900 p-4 font-mono text-xs text-emerald-300">
+                {selectedSubmission.code || 'No code submitted.'}
+              </pre>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="mb-3 flex items-center gap-2 text-slate-700">
+                <Globe size={16} />
+                <p className="text-sm font-bold">Execution Output</p>
+              </div>
+              <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-950 p-4 font-mono text-xs text-emerald-300">
+                {parseSubmissionOutput(selectedSubmission.output) || 'No output recorded.'}
+              </pre>
+            </div>
+          </div>
         )}
       </Modal>
 

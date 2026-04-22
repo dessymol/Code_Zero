@@ -156,7 +156,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 
 testConnection().then(() => {
   loadInitState().then(() => {

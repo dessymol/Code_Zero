@@ -10,8 +10,8 @@ import { io } from 'socket.io-client';
 import FacultyNavbar from './FacultyNavbar';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const API = 'http://localhost:3000/api';
-const SOCKET_URL = 'http://localhost:3000';
+const API = `${import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000'}/api`;
+const SOCKET_URL = import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000';
 
 const LANGUAGES = [
   { id: 62, name: 'Java', color: '#f89820', icon: '☕' },
@@ -95,6 +95,7 @@ export default function ManageQuestions() {
   const [form, setForm] = useState({
     title: '', description: '', sample_input: '', sample_output: '', language_id: LANGUAGES[0].id, score: 100,
   });
+  const [testcases, setTestcases] = useState([{ input: '', output: '', is_public: false }]);
   const [saving, setSaving] = useState(false);
 
   const selectedBatchId = selectedTab === 0 ? null : batches[selectedTab - 1]?.id;
@@ -136,6 +137,7 @@ export default function ManageQuestions() {
           language_id: r.language_id ?? r.languageId ?? LANGUAGES[0].id,
           language: r.language,
           score: r.score ?? r.points ?? r.marks ?? 100,
+          testcases: Array.isArray(r.Testcases) ? r.Testcases : Array.isArray(r.testcases) ? r.testcases : [],
           raw: r,
           batch_states: q.batch_states || q.batchStates || {}
         };
@@ -179,7 +181,14 @@ export default function ManageQuestions() {
         title: form.title, description: form.description,
         sample_input: form.sample_input, sample_output: form.sample_output,
         language_id: Number(form.language_id), score: Number(form.score),
-        course_id: Number(courseId)
+        course_id: Number(courseId),
+        testcases: testcases
+          .map((testcase) => ({
+            input: testcase.input,
+            output: testcase.output,
+            is_public: Boolean(testcase.is_public)
+          }))
+          .filter((testcase) => testcase.input.trim() || testcase.output.trim())
       };
       if (editing) {
         await axios.put(`${API}/questions/update/${editing}`, payload, { headers });
@@ -268,7 +277,12 @@ export default function ManageQuestions() {
             <ActionButton
               label="New Question"
               icon={Plus}
-              onClick={() => { setEditing(null); setForm({ title: '', description: '', sample_input: '', sample_output: '', language_id: LANGUAGES[0].id, score: 100 }); setOpenDialog(true); }}
+              onClick={() => {
+                setEditing(null);
+                setForm({ title: '', description: '', sample_input: '', sample_output: '', language_id: LANGUAGES[0].id, score: 100 });
+                setTestcases([{ input: '', output: '', is_public: false }]);
+                setOpenDialog(true);
+              }}
             />
           )}
         </div>
@@ -387,6 +401,12 @@ export default function ManageQuestions() {
                         <code className="block bg-slate-900 text-slate-200 text-xs p-2 rounded-lg mt-1 font-mono truncate">{q.sample_input}</code>
                       </div>
                     )}
+                    {q.testcases?.length > 0 && (
+                      <div className="mt-3 flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
+                        <span>Saved Testcases</span>
+                        <span>{q.testcases.length}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions / Toggle */}
@@ -398,7 +418,25 @@ export default function ManageQuestions() {
                           <span className="text-xs font-bold text-slate-500">{enabledCount} batches active</span>
                         </div>
                         <div className="flex gap-1">
-                          <button onClick={() => { setEditing(q.id); setForm({ ...q, language_id: q.language_id }); setOpenDialog(true); }} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Edit size={16} /></button>
+                          <button
+                            onClick={() => {
+                              setEditing(q.id);
+                              setForm({ ...q, language_id: q.language_id });
+                              setTestcases(
+                                Array.isArray(q.testcases) && q.testcases.length
+                                  ? q.testcases.map((testcase) => ({
+                                      input: testcase.input || '',
+                                      output: testcase.output || '',
+                                      is_public: Boolean(testcase.is_public)
+                                    }))
+                                  : [{ input: '', output: '', is_public: false }]
+                              );
+                              setOpenDialog(true);
+                            }}
+                            className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          >
+                            <Edit size={16} />
+                          </button>
                           <button onClick={() => handleDelete(q.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /></button>
                         </div>
                       </>
@@ -459,6 +497,83 @@ export default function ManageQuestions() {
             <div>
               <label className="block text-sm font-bold text-slate-700 mb-1">Sample Output</label>
               <textarea className="w-full px-4 py-2 border rounded-xl outline-none font-mono text-sm bg-slate-50" value={form.sample_output} onChange={e => setForm({ ...form, sample_output: e.target.value })} rows={3} />
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold text-slate-800">Evaluation Testcases</h4>
+                <p className="text-xs text-slate-500">Student submissions will be run against these cases during final submit.</p>
+              </div>
+              <ActionButton
+                label="Add Testcase"
+                size="small"
+                variant="secondary"
+                onClick={() => setTestcases((prev) => [...prev, { input: '', output: '', is_public: false }])}
+              />
+            </div>
+            <div className="space-y-3">
+              {testcases.map((testcase, index) => (
+                <div key={index} className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wide text-slate-400">Testcase {index + 1}</span>
+                    {testcases.length > 1 && (
+                      <button
+                        onClick={() => setTestcases((prev) => prev.filter((_, testcaseIndex) => testcaseIndex !== index))}
+                        className="text-xs font-bold text-red-500"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-bold text-slate-600">Input</label>
+                      <textarea
+                        className="w-full rounded-xl border px-3 py-2 font-mono text-sm outline-none"
+                        rows={3}
+                        value={testcase.input}
+                        onChange={(e) =>
+                          setTestcases((prev) =>
+                            prev.map((item, testcaseIndex) =>
+                              testcaseIndex === index ? { ...item, input: e.target.value } : item
+                            )
+                          )
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-bold text-slate-600">Expected Output</label>
+                      <textarea
+                        className="w-full rounded-xl border px-3 py-2 font-mono text-sm outline-none"
+                        rows={3}
+                        value={testcase.output}
+                        onChange={(e) =>
+                          setTestcases((prev) =>
+                            prev.map((item, testcaseIndex) =>
+                              testcaseIndex === index ? { ...item, output: e.target.value } : item
+                            )
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                  <label className="mt-3 flex items-center gap-2 text-xs font-semibold text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(testcase.is_public)}
+                      onChange={(e) =>
+                        setTestcases((prev) =>
+                          prev.map((item, testcaseIndex) =>
+                            testcaseIndex === index ? { ...item, is_public: e.target.checked } : item
+                          )
+                        )
+                      }
+                    />
+                    Visible to students
+                  </label>
+                </div>
+              ))}
             </div>
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">

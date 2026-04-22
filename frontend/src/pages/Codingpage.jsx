@@ -10,7 +10,7 @@ const RAPIDAPI_KEY = import.meta.env.VITE_RAPIDAPI_KEY || null;
 const RAPIDAPI_HOST = import.meta.env.VITE_RAPIDAPI_HOST || 'judge0-ce.p.rapidapi.com';
 
 // Use your backend URL for submissions (not used for routes here, we keep original hardcoded routes)
-const BACKEND_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const BACKEND_API_URL = import.meta.env.VITE_API_ORIGIN || import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const JUDGE0_SUBMISSIONS_URL = `${JUDGE0_API_URL}/submissions`;
 const JUDGE0_SUBMISSIONS_BATCH_URL = `${JUDGE0_API_URL}/submissions/batch`;
@@ -684,7 +684,7 @@ const CodingPage = () => {
 
       // ✅ Keep your original route exactly
       await axios.post(
-        'http://localhost:3000/api/submissions/submit',
+        `${BACKEND_API_URL}/api/submissions/submit`,
         {
           code,
           language_id: Number(langForQuestion),
@@ -763,7 +763,7 @@ const CodingPage = () => {
 
         // ✅ Keep your original routes
         const qResp = await axios.get(
-          `http://localhost:3000/api/submissions/student-questions/${courseId}`,
+          `${BACKEND_API_URL}/api/submissions/student-questions/${courseId}`,
           { headers }
         );
 
@@ -809,7 +809,7 @@ const CodingPage = () => {
         // Course details for violation limit
         try {
           const courseResp = await axios.get(
-            `http://localhost:3000/api/courses/get-course/${courseId}`,
+            `${BACKEND_API_URL}/api/courses/get-course/${courseId}`,
             { headers }
           );
           const courseData = courseResp?.data?.course ? courseResp.data.course : courseResp.data;
