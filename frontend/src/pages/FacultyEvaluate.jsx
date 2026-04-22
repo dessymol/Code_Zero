@@ -107,8 +107,8 @@ export default function FacultyEvaluate() {
   const [scoreBatch, setScoreBatch] = useState(null);
   const [scoreRows, setScoreRows] = useState([]);
   const [scoreLoading, setScoreLoading] = useState(false);
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
 
-  // ADD after existing useState declarations
   const [editingScore, setEditingScore] = useState(null); // { submissionId, value }
   const [savingScore, setSavingScore] = useState(false);
 
@@ -221,9 +221,9 @@ export default function FacultyEvaluate() {
 
   const closeSubmissionViewer = () => {
     setSelectedSubmission(null);
+  };
+
   const saveOverriddenScore = async () => {
-
-
     if (!editingScore) return;
     setSavingScore(true);
     try {
@@ -566,9 +566,6 @@ export default function FacultyEvaluate() {
         )}
       </Modal>
 
-    </>
-  );
-}
     </>
   );
 }

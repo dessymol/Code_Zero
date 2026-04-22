@@ -9,8 +9,13 @@ const JUDGE0_API_URL = import.meta.env.VITE_JUDGE0_URL || 'http://localhost:2358
 const RAPIDAPI_KEY = import.meta.env.VITE_RAPIDAPI_KEY || null;
 const RAPIDAPI_HOST = import.meta.env.VITE_RAPIDAPI_HOST || 'judge0-ce.p.rapidapi.com';
 
-// Use your backend URL for submissions (not used for routes here, we keep original hardcoded routes)
-const BACKEND_API_URL = import.meta.env.VITE_API_ORIGIN || import.meta.env.VITE_API_URL || 'http://localhost:3000';
+// Normalize backend origin so we don't accidentally produce /api/api/... URLs
+const RAW_BACKEND_API_URL =
+  import.meta.env.VITE_API_ORIGIN ||
+  import.meta.env.VITE_BACKEND_URL ||
+  import.meta.env.VITE_API_URL ||
+  'http://localhost:3000';
+const BACKEND_API_URL = RAW_BACKEND_API_URL.replace(/\/api\/?$/, '');
 
 const JUDGE0_SUBMISSIONS_URL = `${JUDGE0_API_URL}/submissions`;
 const JUDGE0_SUBMISSIONS_BATCH_URL = `${JUDGE0_API_URL}/submissions/batch`;
@@ -693,16 +698,21 @@ const CodingPage = () => {
       console.log('📤 ========== Submit Request Started ==========');
       console.log('📝 Question ID:', qid);
       console.log('📥 Using input:', stdin);
-      console.log('📤 Sending code to Judge0 for submission...');
-      const judgeResp = await sendToJudge0({
-        source: code,
-        stdin,
-        language_id: langForQuestion
-      });
-      console.log('✅ Submission result received from Judge0');
+      let judgeResp = null;
+      let usedBackendExecutionFallback = false;
 
-      const formatted = formatJudgeResult(judgeResp, currentQuestion.sample_output);
-      const statusMessage = judgeResp.status ? judgeResp.status.description : 'Unknown Status';
+      try {
+        console.log('📤 Sending code to Judge0 for submission...');
+        judgeResp = await sendToJudge0({
+          source: code,
+          stdin,
+          language_id: langForQuestion
+        });
+        console.log('✅ Submission result received from Judge0');
+      } catch (judgeError) {
+        usedBackendExecutionFallback = true;
+        console.warn('⚠️ Frontend Judge0 submission failed, falling back to backend execution:', judgeError.message);
+      }
 
       const token = localStorage.getItem('token');
 
@@ -716,12 +726,18 @@ const CodingPage = () => {
           course_id: courseId,
           student_id: studentId,
           jwt_token: token,
+          stdin,
+          expected_output: currentQuestion.sample_output,
           sample_input: stdin,
           sample_output: currentQuestion.sample_output,
           judge_result: judgeResp
         },
         { headers: { Authorization: token ? `Bearer ${token}` : '' } }
       );
+
+      const finalJudgeResult = submitResponse.data?.judgeResult || judgeResp;
+      const formatted = formatJudgeResult(finalJudgeResult || {}, currentQuestion.sample_output);
+      const statusMessage = finalJudgeResult?.status ? finalJudgeResult.status.description : 'Unknown Status';
 
       const submissionId = submitResponse.data?.submission?.id;
       if (submissionId) {
@@ -783,13 +799,13 @@ const CodingPage = () => {
 
       setResults(prev => ({
         ...prev,
-        [qid]: `✅ Submission Complete!\nJudge0 Status: ${statusMessage}\n\n${formatted.displayText}`
+        [qid]: `✅ Submission Complete!\nJudge0 Status: ${statusMessage}${usedBackendExecutionFallback ? '\nExecution was completed by the backend fallback path.' : ''}\n\n${formatted.displayText}`
       }));
     } catch (err) {
       console.error('Submission error:', err);
       setResults(prev => ({
         ...prev,
-        [qid]: `Submission Error: ${err.response?.data?.message || err.message}\n\nCode was saved but Judge0 execution failed.`
+        [qid]: `Submission Error: ${err.response?.data?.message || err.message}\n\nThe submission could not be completed.`
       }));
     }
     setCompiling(c => ({ ...c, [qid]: false }));
@@ -827,7 +843,7 @@ const CodingPage = () => {
 
         // ✅ Keep your original routes
         const qResp = await axios.get(
-          `${BACKEND_API_URL}/api/submissions/student-questions/${courseId}`,
+          `${BACKEND_API_URL}/api/questions/course/${courseId}`,
           { headers }
         );
 
@@ -924,6 +940,10 @@ const CodingPage = () => {
   };
 
   // --- UI & render ---
+  if (loading) return <div style={{ padding: 20 }}>Loading questions.</div>;
+  if (pageError) return <div style={{ color: 'red', padding: 20 }}>{pageError}</div>;
+  if (!studentId) return <div style={{ color: 'red', padding: 20 }}>You must log in to attempt this exam.</div>;
+
   if (!started) {
     return (
       <div style={{
@@ -1006,10 +1026,6 @@ const CodingPage = () => {
       </div>
     );
   }
-
-  if (loading) return <div style={{ padding: 20 }}>Loading questions.</div>;
-  if (pageError) return <div style={{ color: 'red', padding: 20 }}>{pageError}</div>;
-  if (!studentId) return <div style={{ color: 'red', padding: 20 }}>You must log in to attempt this exam.</div>;
 
   if (questions.length === 0) {
     return (

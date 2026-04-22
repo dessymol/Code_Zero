@@ -5,9 +5,6 @@ const { login , changePassword , getMe, updateMe } = require('../controllers/use
 const facultyController = require('../controllers/facultyController');
 const { facultyAuth } = require('../Middleware/authmiddleware');
 const { writeAuditLog } = require('../services/auditLogService');
-const { login , changePassword , getMe, updateMe } = require('../controllers/userController');
-const facultyController = require('../controllers/facultyController');
-const { facultyAuth } = require('../Middleware/authmiddleware');
 
 
 //Faculty functionalities

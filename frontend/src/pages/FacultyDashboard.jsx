@@ -526,32 +526,47 @@ export default function FacultyDashboard() {
                   ) : recentSubs.length === 0 ? (
                     <div className="text-center py-6 text-slate-400 italic">No recent activity</div>
                   ) : (
-                    recentSubs.map((s, i) => (
-                      <div key={s.id || i} className="p-3 bg-white rounded-xl border border-slate-100 shadow-sm hover:border-blue-200 transition-colors">
-                        <div className="flex justify-between items-start mb-1">
-                          <span className="text-xs font-bold text-slate-700 truncate max-w-[70%]">{s.student_name || s.studentName}</span>
-                          <span className="text-[10px] font-medium text-slate-400">{new Date(s.createdAt).toLocaleDateString()}</span>
-                        </div>
-                        <div className="text-[10px] text-slate-500 font-medium truncate mb-2">{s.course_name}</div>
-                        <div className="flex items-center gap-2">
-  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getSubmissionBadge(s).className}`}>
-    {getSubmissionBadge(s).label}
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${s.verdict === 'Accepted' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-      {s.verdict || 'Pending'}
-    </span>
-  </div>
-                    </div >
-                  ))
-                )
-}
-              </div >
-            </div >
-          </div >
+                    recentSubs.map((s, i) => {
+                      const submissionBadge = getSubmissionBadge(s);
 
-  {/* Middle Column: Detailed Stats */ }
-  < div className = "lg:col-span-1 xl:col-span-2 space-y-6" >
-    {/* Sparkline */ }
-    < div className = "lms-card p-6" >
+                      return (
+                        <div
+                          key={s.id || i}
+                          className="p-3 bg-white rounded-xl border border-slate-100 shadow-sm hover:border-blue-200 transition-colors"
+                        >
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="text-xs font-bold text-slate-700 truncate max-w-[70%]">
+                              {s.student_name || s.studentName}
+                            </span>
+                            <span className="text-[10px] font-medium text-slate-400">
+                              {new Date(s.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-slate-500 font-medium truncate mb-2">{s.course_name}</div>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${submissionBadge.className}`}>
+                              {submissionBadge.label}
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                s.verdict === 'Accepted' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                              }`}
+                            >
+                              {s.verdict || 'Pending'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Middle Column: Detailed Stats */}
+            <div className="lg:col-span-1 xl:col-span-2 space-y-6">
+              {/* Sparkline */}
+              <div className="lms-card p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-600">
@@ -564,10 +579,10 @@ export default function FacultyDashboard() {
               <div className="h-[150px]">
                 <AreaSpark points={areaTimeseries} height={150} color="#10b981" />
               </div>
-            </div >
+              </div>
 
-  {/* Students & Submissions Bar Lists */ }
-  < div className = "lms-card p-6 min-h-[300px]" >
+              {/* Students & Submissions Bar Lists */}
+              <div className="lms-card p-6 min-h-[300px]">
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2.5 rounded-xl bg-orange-100 text-orange-600">
                   <LayoutDashboard size={24} />
@@ -585,13 +600,13 @@ export default function FacultyDashboard() {
                   <CourseBarList items={groupedSeries[1].values} />
                 </div>
               </div>
-            </div >
-          </div >
+              </div>
+            </div>
 
-  {/* Right Column: Messages & Quick Actions */ }
-  < div className = "lg:col-span-1 space-y-6" >
-    {/* Messages */ }
-    < div className = "lms-card p-6 flex flex-col h-[500px]" >
+            {/* Right Column: Messages & Quick Actions */}
+            <div className="lg:col-span-1 space-y-6">
+              {/* Messages */}
+              <div className="lms-card p-6 flex flex-col h-[500px]">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2.5 rounded-xl bg-pink-100 text-pink-600">
                   <MessageSquare size={24} />
@@ -622,12 +637,12 @@ export default function FacultyDashboard() {
                   ))
                 )}
               </div>
-            </div >
-          </div >
+              </div>
+            </div>
 
-        </div >
-      </div >
-    </div >
+          </div>
+        </div>
+      </div>
     </>
   );
 }
