@@ -95,10 +95,10 @@ const SuperAdminDashboard = () => {
   const loadLogs = async () => {
     setLogsLoading(true);
     try {
-      const logsRes = await axios.get(`${API_BASE}/audit-logs?limit=10&page=1&days=7`);
+      const logsRes = await axios.get(`${API_USERS}/audit-logs?limit=10&page=1&days=7`);
       setLogs(logsRes.data?.data?.rows || []);
       
-      const statsRes = await axios.get(`${API_BASE}/audit-logs/stats`);
+      const statsRes = await axios.get(`${API_USERS}/audit-logs/stats`);
       setLogStats(statsRes.data?.data || null);
     } catch (err) {
       console.error('Failed to load audit logs:', err);

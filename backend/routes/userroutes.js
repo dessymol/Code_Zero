@@ -1,10 +1,7 @@
 const express = require('express');
-const { User } = require('../models'); // Sequelize model
-const { AuditLog } = require('../models');
 const { login , changePassword , getMe, updateMe } = require('../controllers/userController');
 const facultyController = require('../controllers/facultyController');
 const { facultyAuth } = require('../Middleware/authmiddleware');
-const { writeAuditLog } = require('../services/auditLogService');
 
 
 //Faculty functionalities
@@ -18,7 +15,7 @@ const { deleteFaculty } = require('../controllers/facultyController');
 const { authMiddleware, roleMiddleware ,adminAuth } = require('../Middleware/authmiddleware');
 const ApiError = require('../utils/ApiError');
 const bcrypt = require('bcryptjs');
-const { AuditLog, User: UserModel } = require('../models');
+const { AuditLog, User } = require('../models');
 const { writeAuditLog } = require('../services/auditLogService');
 
 const router = express.Router();

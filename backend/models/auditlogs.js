@@ -5,24 +5,24 @@ module.exports = (sequelize, DataTypes) => {
       primaryKey: true,
       autoIncrement: true
     },
-    actor_user_id: {
+    user_id: {
       type: DataTypes.INTEGER,
       allowNull: true
     },
-    actor_role: {
-      type: DataTypes.STRING(50),
+    user_email: {
+      type: DataTypes.STRING,
       allowNull: true
     },
     action: {
       type: DataTypes.STRING(120),
       allowNull: false
     },
-    target_type: {
+    resource_type: {
       type: DataTypes.STRING(80),
       allowNull: true
     },
-    target_id: {
-      type: DataTypes.STRING(80),
+    resource_id: {
+      type: DataTypes.INTEGER,
       allowNull: true
     },
     status: {
@@ -32,6 +32,14 @@ module.exports = (sequelize, DataTypes) => {
     },
     details: {
       type: DataTypes.JSON,
+      allowNull: true
+    },
+    ip_address: {
+      type: DataTypes.STRING(45),
+      allowNull: true
+    },
+    user_agent: {
+      type: DataTypes.TEXT,
       allowNull: true
     }
   }, {
@@ -44,7 +52,7 @@ module.exports = (sequelize, DataTypes) => {
   AuditLog.associate = (db) => {
     if (db.User) {
       AuditLog.belongsTo(db.User, {
-        foreignKey: 'actor_user_id',
+        foreignKey: 'user_id',
         as: 'Actor'
       });
     }

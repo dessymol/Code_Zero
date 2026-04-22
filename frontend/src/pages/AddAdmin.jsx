@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import AdminLayout from './AdminLayout';
 
-const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:4000';
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000';
 const API_USERS = `${API_ORIGIN}/api/v1/users`;
 const API_ALL_USERS = `${API_USERS}/all-users`;
 const API_COURSES = `${API_ORIGIN}/api/courses`;
