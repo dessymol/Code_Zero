@@ -5,24 +5,20 @@ class Judge0Service {
     this.baseURL = process.env.JUDGE0_URL || 'http://localhost:2358';
     this.rapidApiKey = process.env.RAPIDAPI_KEY || null;
     this.rapidApiHost = process.env.RAPIDAPI_HOST || 'judge0-ce.p.rapidapi.com';
-    
     // Configure headers based on whether we're using RapidAPI or self-hosted
     const headers = {
       'Content-Type': 'application/json'
     };
-    
     // Add RapidAPI headers if using RapidAPI
     if (this.rapidApiKey && this.baseURL.includes('rapidapi.com')) {
       headers['X-RapidAPI-Key'] = this.rapidApiKey;
       headers['X-RapidAPI-Host'] = this.rapidApiHost;
     }
-    
     this.client = axios.create({
       baseURL: this.baseURL,
       timeout: 60000, // 60 seconds timeout for code execution
       headers: headers
     });
-    
     // Map of common language names to Judge0 language IDs
     this.languageMap = {
       'python': 71,      // Python 3.8.1
@@ -57,9 +53,17 @@ class Judge0Service {
     if (typeof language === 'number') {
       return language;
     }
-    
     const lang = String(language).toLowerCase().trim();
     return this.languageMap[lang] || 71; // Default to Python if not found
+  }
+
+  /**
+   * Encode string to base64 (required by Judge0 API)
+   * @param {string} str - String to encode
+   * @returns {string} Base64 encoded string
+   */
+  encodeBase64(str) {
+    return Buffer.from(String(str || '')).toString('base64');
   }
 
   /**
@@ -74,20 +78,29 @@ class Judge0Service {
   async submitCode(sourceCode, language, stdin = '', expectedOutput = '', wait = true) {
     try {
       const languageId = this.getLanguageId(language);
+
+      // Base64 encode required fields for Judge0 API
+      const encodedSourceCode = this.encodeBase64(sourceCode);
+      const encodedStdin = this.encodeBase64(stdin);
+      const encodedExpectedOutput = expectedOutput ? this.encodeBase64(expectedOutput) : null;
+
       console.log('[Judge0Service] Submitting code:', {
         languageId,
         language,
+        sourceCode: sourceCode.substring(0, 100),  // Log first 100 chars of actual code
         sourceCodeLength: sourceCode?.length || 0,
+        stdin: stdin.substring(0, 100),  // Log first 100 chars of stdin
         stdinLength: stdin?.length || 0,
+        expectedOutputLength: expectedOutput?.length || 0,
         wait
       });
-      
+
       // Create submission without wait parameter to avoid timeout issues
       const createResponse = await this.client.post('/submissions', {
-        source_code: sourceCode,
+        source_code: encodedSourceCode,
         language_id: languageId,
-        stdin: stdin,
-        expected_output: expectedOutput || null,
+        stdin: encodedStdin,
+        expected_output: encodedExpectedOutput,
         cpu_time_limit: 5,
         memory_limit: 128000,
         stack_limit: 64000
@@ -97,21 +110,19 @@ class Judge0Service {
         },
         timeout: 10000 // 10 second timeout for submission creation
       });
-      
+
       const token = createResponse.data.token;
       console.log('[Judge0Service] Submission created with token:', token);
-      
+
       // If wait is false, return immediately with token
       if (!wait) {
         console.log('[Judge0Service] Returning immediately (wait=false)');
         return createResponse.data;
       }
-      
       // Poll for result with exponential backoff
       let result = null;
       let attempts = 0;
       const maxAttempts = 30; // 30 seconds max waiting
-      
       console.log('[Judge0Service] Starting to poll for result...');
       while (attempts < maxAttempts) {
         // Wait before polling (exponential backoff)
@@ -119,18 +130,17 @@ class Judge0Service {
           const delay = Math.min(1000 * (1 + attempts * 0.3), 2000);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
-        
         try {
           const resultResponse = await this.client.get(`/submissions/${token}`, {
             timeout: 5000
           });
-          
+
           result = resultResponse.data;
           const statusId = result.status?.id || result.status_id || 0;
           const statusDesc = result.status?.description || 'Unknown';
-          
+
           console.log(`[Judge0Service] Poll attempt ${attempts + 1}: Status ID=${statusId}, Description=${statusDesc}`);
-          
+
           // Check if processing is complete
           // Status IDs: 1 = In Queue, 2 = Processing, others = Complete/Error
           if (result.status && result.status.id !== 1 && result.status.id !== 2) {
@@ -146,24 +156,54 @@ class Judge0Service {
         } catch (pollError) {
           console.warn(`[Judge0Service] Error fetching result (attempt ${attempts + 1}):`, pollError.message);
         }
-        
+
         attempts++;
       }
-      
+
       if (!result) {
         console.error('[Judge0Service] Timeout waiting for result after', maxAttempts, 'attempts');
         throw new Error('Timeout waiting for Judge0 result');
       }
-      
-      // Log final result
-      if (result.status?.id === 13) {
+
+      // Decode base64 fields from Judge0 response
+      if (result.stdout) {
+        try {
+          result.stdout = Buffer.from(result.stdout, 'base64').toString('utf-8');
+        } catch (e) {
+          console.warn('[Judge0Service] Failed to decode stdout:', e.message);
+        }
+      }
+
+      if (result.stderr) {
+        try {
+          result.stderr = Buffer.from(result.stderr, 'base64').toString('utf-8');
+        } catch (e) {
+          console.warn('[Judge0Service] Failed to decode stderr:', e.message);
+        }
+      }
+
+      if (result.compile_output) {
+        try {
+          result.compile_output = Buffer.from(result.compile_output, 'base64').toString('utf-8');
+        } catch (e) {
+          console.warn('[Judge0Service] Failed to decode compile_output:', e.message);
+        }
+      }
+
+      // Log final result with details
+      if (result.status?.id === 11) {
+        // Runtime error
+        console.error('[Judge0Service] Runtime Error (NZEC) received:', {
+          statusId: result.status.id,
+          stderr: result.stderr ? result.stderr.substring(0, 500) : 'No error output'
+        });
+      } else if (result.status?.id === 13) {
         console.error('[Judge0Service] Internal Error received:', {
           message: result.message,
           stderr: result.stderr,
           compile_output: result.compile_output
         });
       }
-      
       return result;
     } catch (error) {
       console.error('[Judge0Service] Submission error:', {
@@ -173,7 +213,6 @@ class Judge0Service {
         responseData: error.response?.data,
         stack: error.stack
       });
-      
       // Return a mock error response if Judge0 is down
       if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
         return {
@@ -189,7 +228,6 @@ class Judge0Service {
           memory: null
         };
       }
-      
       // If we got a response but it's an error, return it
       if (error.response && error.response.data) {
         return {
@@ -205,7 +243,6 @@ class Judge0Service {
           memory: null
         };
       }
-      
       throw error;
     }
   }
@@ -235,7 +272,6 @@ class Judge0Service {
       return response.data;
     } catch (error) {
       console.error('Judge0 get languages error:', error.message);
-      
       // Return a default list if Judge0 is down
       return [
         { id: 71, name: 'Python 3.8.1' },

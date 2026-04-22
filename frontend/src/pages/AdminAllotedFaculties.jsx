@@ -6,7 +6,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import AdminLayout from './AdminLayout';
 import { motion } from 'framer-motion';
 
-const API_BASE = 'http://localhost:4000/api';
+const API_BASE = 'http://localhost:3000/api';
 const COLORS = ['#2563eb','#7c3aed','#059669','#d97706','#dc2626','#0891b2','#4f46e5','#db2777'];
 
 export default function AdminAllotedFaculties() {

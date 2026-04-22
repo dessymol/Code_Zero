@@ -31,7 +31,7 @@ export default function FacultyNavbar() {
     let mounted = true;
     const token = localStorage.getItem('token') || '';
     if (!token) return;
-    axios.get('http://localhost:4000/api/v1/users/me', { headers: { Authorization: `Bearer ${token}` }, timeout: 5000 })
+    axios.get('http://localhost:3000/api/v1/users/me', { headers: { Authorization: `Bearer ${token}` }, timeout: 5000 })
       .then(res => {
         if (!mounted) return;
         const body = res?.data ?? {};
@@ -39,7 +39,7 @@ export default function FacultyNavbar() {
         const name = user?.name || user?.fullname || user?.fullName || '';
         if (name) setFacultyName(String(name));
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => { mounted = false; };
   }, []);
 

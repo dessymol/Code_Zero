@@ -1,5 +1,5 @@
 // backend/utils/emailTemplates.js
-const FRONTEND_URL = process.env.FRONTEND_LOGIN_URL || 'http://localhost:5000';
+const FRONTEND_URL = process.env.FRONTEND_LOGIN_URL || 'http://localhost:3000';
 
 function escapeHtml(s) {
   return String(s || '')

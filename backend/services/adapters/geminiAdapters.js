@@ -21,7 +21,7 @@ async function call(prompt) {
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: {
             temperature: 0.2,       // Low temperature = more deterministic JSON
-            maxOutputTokens: 4096,  // Increased from 2048 to handle longer test cases
+            maxOutputTokens: 2048,
         }
     });
 

@@ -61,35 +61,24 @@ async function generateFeedback(params) {
 // ── Prompt builders ──────────────────────────────────────────────
 
 function buildTestCasePrompt(question, count) {
-    // Sanitize question input to prevent JSON injection
-    const sanitize = (str) => String(str || '')
-        .replace(/\\/g, '\\\\')
-        .replace(/"/g, '\\"')
-        .replace(/\n/g, '\\n')
-        .replace(/\r/g, '\\r');
-
     return `You are a test case generator for a coding judge system.
-
-Question title: ${sanitize(question.title).substring(0, 100)}
-Description: ${sanitize(question.description || 'No description provided.').substring(0, 300)}
-Sample input: ${sanitize(question.sample_input || 'None').substring(0, 200)}
-Sample output: ${sanitize(question.sample_output || 'None').substring(0, 200)}
-
+ 
+Question title: ${question.title}
+Description: ${question.description || 'No description provided.'}
+Sample input: ${question.sample_input || 'None'}
+Sample output: ${question.sample_output || 'None'}
+ 
 Generate exactly ${count} test cases. Cover edge cases: empty input, large values, negative numbers, boundary conditions.
-
-CRITICAL REQUIREMENTS:
-- Each input and output MUST be properly escaped JSON strings
-- Do NOT include unescaped quotes or special characters inside strings
-- Do NOT generate extremely long inputs (keep inputs under 500 characters each)
-- Output must be exact with no trailing spaces or extra newlines unless required
+ 
+Rules:
+- Output must be exact (no trailing spaces, no extra newlines beyond what is required)
 - Each test case must be independently runnable
-
-Return ONLY a valid JSON array. No explanation, no markdown, no code fences.
-
-Valid format example:
+- Return ONLY a JSON array. No explanation, no markdown, no code fences.
+ 
+Format:
 [
-  { "input": "", "output": "" },
-  { "input": "test", "output": "result" }
+  { "input": "...", "output": "..." },
+  { "input": "...", "output": "..." }
 ]`;
 }
 
@@ -124,29 +113,71 @@ Respond ONLY with this JSON object. No markdown, no explanation outside the JSON
 
 // ── JSON parsers ─────────────────────────────────────────────────
 
+function attemptJsonRepair(text) {
+    // Try to repair truncated JSON by finding the last complete structure
+    let openBraces = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let i = text.length - 1; i >= 0; i--) {
+        const char = text[i];
+
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+
+        if (char === '\\') {
+            escaped = true;
+            continue;
+        }
+
+        if (char === '"') {
+            inString = !inString;
+        } else if (!inString) {
+            if (char === '}') openBraces++;
+            else if (char === '{') {
+                openBraces--;
+                if (openBraces === 0) {
+                    // Found the last complete object
+                    return text.substring(0, i + 1);
+                }
+            }
+        }
+    }
+
+    return text;
+}
+
 function parseJsonArray(raw, label) {
-    const cleaned = stripCodeFences(raw);
+    let cleaned = stripCodeFences(raw);
+
     try {
         const parsed = JSON.parse(cleaned);
         if (!Array.isArray(parsed)) throw new Error('Response is not a JSON array');
         return parsed;
     } catch (err) {
-        console.error(`[llmService] Failed to parse ${label} JSON:`, err.message);
-        console.error('[llmService] Cleaned response:', cleaned.substring(0, 500) + (cleaned.length > 500 ? '...' : ''));
-        console.error('[llmService] Raw response length:', raw.length);
+        // Try to repair truncated JSON
+        console.warn(`[llmService] First parse attempt failed, attempting repair: ${err.message}`);
 
-        // Try to recover from truncated JSON
         try {
-            const recovered = attemptRecoverTruncatedJson(cleaned);
-            console.warn(`[llmService] Attempting recovery for ${label}...`);
-            const parsed = JSON.parse(recovered);
-            if (!Array.isArray(parsed)) throw new Error('Recovered response is not a JSON array');
-            console.warn(`[llmService] Successfully recovered ${label} JSON`);
-            return parsed;
-        } catch (recoveryErr) {
-            console.error('[llmService] Recovery failed:', recoveryErr.message);
-            throw new Error(`LLM returned invalid JSON for ${label}: ${err.message}`);
+            // Find last complete array bracket
+            const lastBracket = cleaned.lastIndexOf(']');
+            if (lastBracket > 0) {
+                const truncated = cleaned.substring(0, lastBracket + 1);
+                const parsed = JSON.parse(truncated);
+                if (Array.isArray(parsed)) {
+                    console.warn(`[llmService] Successfully repaired truncated ${label} JSON`);
+                    return parsed;
+                }
+            }
+        } catch (repairErr) {
+            console.warn(`[llmService] Repair attempt failed: ${repairErr.message}`);
         }
+
+        console.error(`[llmService] Failed to parse ${label} JSON:`, err.message);
+        console.error(`[llmService] Raw response (first 1000 chars):`, raw.substring(0, 1000));
+        throw new Error(`LLM returned invalid JSON for ${label}: ${err.message}`);
     }
 }
 
@@ -158,8 +189,7 @@ function parseJsonObject(raw, label) {
         return parsed;
     } catch (err) {
         console.error(`[llmService] Failed to parse ${label} JSON:`, err.message);
-        console.error('[llmService] Cleaned response:', cleaned.substring(0, 500) + (cleaned.length > 500 ? '...' : ''));
-        console.error('[llmService] Raw response length:', raw.length);
+        console.error('[llmService] Raw response:', raw.substring(0, 500));
         throw new Error(`LLM returned invalid JSON for ${label}: ${err.message}`);
     }
 }
@@ -170,46 +200,6 @@ function stripCodeFences(text) {
         .replace(/^```(?:json)?\s*/i, '')
         .replace(/\s*```\s*$/, '')
         .trim();
-}
-
-function attemptRecoverTruncatedJson(text) {
-    // If the JSON appears to be truncated with an unterminated string,
-    // try to close it gracefully
-    let recovered = text;
-
-    // Count unescaped quotes to detect unclosed string
-    const quoteMatches = text.match(/(?<!\\)"/g) || [];
-
-    // If odd number of quotes, we likely have an unterminated string
-    if (quoteMatches.length % 2 === 1) {
-        // Try to close the object/array properly
-        recovered = text.replace(/,\s*$/, '') + '"}]'; // Close unterminated string and array
-        try {
-            JSON.parse(recovered);
-            return recovered;
-        } catch (e) {
-            // Try alternative recovery
-            recovered = text.replace(/,\s*$/, '') + '"}]';
-            // If still fails, return original and let it throw
-            return text;
-        }
-    }
-
-    // Try closing unclosed braces/brackets
-    const openBraces = (text.match(/{/g) || []).length;
-    const closeBraces = (text.match(/}/g) || []).length;
-    const openBrackets = (text.match(/\[/g) || []).length;
-    const closeBrackets = (text.match(/\]/g) || []).length;
-
-    recovered = text;
-    for (let i = openBraces - closeBraces; i > 0; i--) {
-        recovered += '}';
-    }
-    for (let i = openBrackets - closeBrackets; i > 0; i--) {
-        recovered += ']';
-    }
-
-    return recovered;
 }
 
 module.exports = { generateTestCases, generateFeedback };
