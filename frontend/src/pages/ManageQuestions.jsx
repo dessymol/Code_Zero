@@ -23,7 +23,7 @@ const LANGUAGES = [
   { id: 63, name: 'JavaScript', color: '#f7df1e', icon: '⚡' },
   { id: 54, name: 'C++', color: '#00599c', icon: '⚙️' },
   { id: 50, name: 'C', color: '#a8b9cc', icon: '🔧' },
-  { id: 70, name: 'Python3', color: '#3776ab', icon: '🐍' },
+  { id: 70, name: 'Python 2', color: '#3776ab', icon: '🐍' },
 ];
 
 // --- Reuseable Components ---
@@ -146,6 +146,7 @@ export default function ManageQuestions() {
           description: r.description,
           sample_input: r.sample_input,
           sample_output: r.sample_output,
+          reference_solution: r.reference_solution,
           language_id: r.language_id ?? r.languageId ?? LANGUAGES[0].id,
           language: r.language,
           score: r.score ?? r.points ?? r.marks ?? 100,

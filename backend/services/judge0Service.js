@@ -58,15 +58,6 @@ class Judge0Service {
   }
 
   /**
-   * Encode string to base64 (required by Judge0 API)
-   * @param {string} str - String to encode
-   * @returns {string} Base64 encoded string
-   */
-  encodeBase64(str) {
-    return Buffer.from(String(str || '')).toString('base64');
-  }
-
-  /**
    * Submit code to Judge0 for execution
    * @param {string} sourceCode - The source code to execute
    * @param {string|number} language - Language name or ID
@@ -78,11 +69,6 @@ class Judge0Service {
   async submitCode(sourceCode, language, stdin = '', expectedOutput = '', wait = true) {
     try {
       const languageId = this.getLanguageId(language);
-
-      // Base64 encode required fields for Judge0 API
-      const encodedSourceCode = this.encodeBase64(sourceCode);
-      const encodedStdin = this.encodeBase64(stdin);
-      const encodedExpectedOutput = expectedOutput ? this.encodeBase64(expectedOutput) : null;
 
       console.log('[Judge0Service] Submitting code:', {
         languageId,
@@ -97,14 +83,17 @@ class Judge0Service {
 
       // Create submission without wait parameter to avoid timeout issues
       const createResponse = await this.client.post('/submissions', {
-        source_code: encodedSourceCode,
+        source_code: sourceCode,
         language_id: languageId,
-        stdin: encodedStdin,
-        expected_output: encodedExpectedOutput,
+        stdin,
+        expected_output: expectedOutput || null,
         cpu_time_limit: 5,
         memory_limit: 128000,
         stack_limit: 64000
       }, {
+        params: {
+          base64_encoded: false
+        },
         headers: {
           'Content-Type': 'application/json'
         },
@@ -132,6 +121,9 @@ class Judge0Service {
         }
         try {
           const resultResponse = await this.client.get(`/submissions/${token}`, {
+            params: {
+              base64_encoded: false
+            },
             timeout: 5000
           });
 
@@ -163,31 +155,6 @@ class Judge0Service {
       if (!result) {
         console.error('[Judge0Service] Timeout waiting for result after', maxAttempts, 'attempts');
         throw new Error('Timeout waiting for Judge0 result');
-      }
-
-      // Decode base64 fields from Judge0 response
-      if (result.stdout) {
-        try {
-          result.stdout = Buffer.from(result.stdout, 'base64').toString('utf-8');
-        } catch (e) {
-          console.warn('[Judge0Service] Failed to decode stdout:', e.message);
-        }
-      }
-
-      if (result.stderr) {
-        try {
-          result.stderr = Buffer.from(result.stderr, 'base64').toString('utf-8');
-        } catch (e) {
-          console.warn('[Judge0Service] Failed to decode stderr:', e.message);
-        }
-      }
-
-      if (result.compile_output) {
-        try {
-          result.compile_output = Buffer.from(result.compile_output, 'base64').toString('utf-8');
-        } catch (e) {
-          console.warn('[Judge0Service] Failed to decode compile_output:', e.message);
-        }
       }
 
       // Log final result with details
@@ -254,7 +221,11 @@ class Judge0Service {
    */
   async getSubmission(token) {
     try {
-      const response = await this.client.get(`/submissions/${token}`);
+      const response = await this.client.get(`/submissions/${token}`, {
+        params: {
+          base64_encoded: false
+        }
+      });
       return response.data;
     } catch (error) {
       console.error('Judge0 get submission error:', error.message);
