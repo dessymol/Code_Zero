@@ -5,8 +5,8 @@ import { io } from 'socket.io-client';
 import { useParams } from 'react-router-dom';
 import FacultyNavbar from './FacultyNavbar';
 
-const API_BASE = 'http://localhost:3000';
-const SOCKET_URL = 'http://localhost:3000';
+const API_BASE = 'http://localhost:5000';
+const SOCKET_URL = 'http://localhost:5000';
 
 export default function FacultyChatView() {
   const { courseId: urlCourseId } = useParams();

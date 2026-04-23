@@ -18,8 +18,7 @@ import AdminLayout from './AdminLayout';
 const API_ORIGIN =
   import.meta.env.VITE_API_ORIGIN ||
   import.meta.env.VITE_BACKEND_URL ||
-  'http://localhost:3000';
-
+  'http://localhost:5000';
 const API_USERS = `${API_ORIGIN}/api/v1/users`;
 const API_COURSES = `${API_ORIGIN}/api/courses`;
 const API_STUDENTS = `${API_ORIGIN}/api/students`;

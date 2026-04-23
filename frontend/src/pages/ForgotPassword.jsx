@@ -4,7 +4,7 @@ import axios from 'axios';
 import { ArrowLeft, Mail, Lock, Eye, EyeOff, Send, RefreshCw } from 'lucide-react';
 import AuthShell from '../components/AuthShell';
 
-const API_BASE = 'http://localhost:3000/api';
+const API_BASE = 'http://localhost:5000/api';
 
 export default function ForgotPassword() {
   const navigate = useNavigate();

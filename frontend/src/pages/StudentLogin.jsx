@@ -11,7 +11,7 @@ const StudentLogin = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const API_URL = 'http://localhost:3000/api/students/login';
+  const API_URL = 'http://localhost:5000/api/students/login';
 
   const handleLogin = async (e) => {
     e.preventDefault();

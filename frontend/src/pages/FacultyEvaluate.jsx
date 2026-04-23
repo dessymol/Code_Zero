@@ -9,7 +9,7 @@ import axios from 'axios';
 import FacultyNavbar from './FacultyNavbar';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const API = `${import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000'}/api`;
+const API = `${import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000'}/api`;
 
 const formatDateKey = (iso) => {
   if (!iso) return 'Unknown Date';
