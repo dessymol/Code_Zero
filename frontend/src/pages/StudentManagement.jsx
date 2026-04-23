@@ -11,7 +11,7 @@ import { useToast } from '../context/ToastContext';
 import Skeleton from '../components/Skeleton';
 import Pagination from '../components/Pagination';
 
-const API_BASE = 'http://localhost:4000/api';
+const API_BASE = 'http://localhost:3000/api';
 const API_COURSES = `${API_BASE}/courses/get-all-courses`;
 const API_STUDENTS = `${API_BASE}/students`;
 

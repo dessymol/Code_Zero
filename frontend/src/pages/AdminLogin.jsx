@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { clearSession, setSession } from '../utils/auth';
 import AuthShell from '../components/AuthShell';
 
-const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:4000';
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000';
 
 const AdminLogin = () => {
   const [email, setEmail] = useState('');

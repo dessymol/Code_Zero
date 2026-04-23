@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import AdminLayout from './AdminLayout';
 
-const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:4000';
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000';
 const API_USERS = `${API_ORIGIN}/api/v1/users`;
 const API_COURSES = `${API_ORIGIN}/api/courses`;
 const API_STUDENTS = `${API_ORIGIN}/api/students`;
@@ -63,8 +63,6 @@ const SuperAdminDashboard = () => {
   const [courses, setCourses] = useState([]);
   const [students, setStudents] = useState([]);
   const [logs, setLogs] = useState([]);
-  const [logStats, setLogStats] = useState(null);
-  const [logsLoading, setLogsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -92,25 +90,26 @@ const SuperAdminDashboard = () => {
     }
   }, []);
 
-  const loadLogs = async () => {
-    setLogsLoading(true);
-    try {
-      const logsRes = await axios.get(`${API_USERS}/audit-logs?limit=10&page=1&days=7`);
-      setLogs(logsRes.data?.data?.rows || []);
-      
-      const statsRes = await axios.get(`${API_USERS}/audit-logs/stats`);
-      setLogStats(statsRes.data?.data || null);
-    } catch (err) {
-      console.error('Failed to load audit logs:', err);
-      setLogs([]);
-    } finally {
-      setLogsLoading(false);
-    }
-  };
+  useEffect(() => {
+    const recordDashboardView = async () => {
+      try {
+        await axios.post(
+          `${API_USERS}/audit-logs`,
+          {
+            action: 'view_super_admin_dashboard',
+            targetType: 'dashboard',
+            targetId: 'super_admin',
+            details: { source: 'super_admin_dashboard' }
+          },
+          { headers: getAuthHeaders() }
+        );
+      } catch {
+        // Keep dashboard usable even if audit logging fails.
+      }
+    };
 
-  useEffect(() => { 
-    load(); 
-    loadLogs();
+    recordDashboardView();
+    load();
   }, []);
 
   const stats = useMemo(() => {
@@ -308,41 +307,73 @@ const SuperAdminDashboard = () => {
             </div>
           </div>
 
-          <div className="lms-card p-5">
-            <h3 className="text-lg font-bold text-slate-800 mb-4">System Logs</h3>
-            <div className="space-y-2">
-              {logsLoading ? (
-                <p className="text-xs text-slate-400">Loading logs...</p>
-              ) : logs.length === 0 ? (
-                <p className="text-xs text-slate-400">No audit logs found in the last 7 days.</p>
+          <div className="lms-card overflow-hidden p-0">
+            <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-700 px-5 py-4 text-white">
+              <div className="flex items-center justify-between">
+                <h3 className="flex items-center gap-2 text-lg font-bold">
+                  <ScrollText size={18} />
+                  System Logs
+                </h3>
+                <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold">
+                  {logs.length} events
+                </span>
+              </div>
+            </div>
+
+            <div className="max-h-[640px] space-y-3 overflow-y-auto bg-slate-50 p-5">
+              {logs.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500">
+                  No audit logs recorded yet.
+                </div>
               ) : (
-                <>
-                  {logStats && (
-                    <div className="mb-3 p-2 bg-slate-50 rounded-lg border border-slate-100">
-                      <p className="text-xs font-bold text-slate-600">
-                        Total: {logStats.total} | Last 24h: {logStats.last24h}
-                      </p>
-                    </div>
-                  )}
-                  {logs.slice(0, 6).map((log) => (
-                    <div key={log.id} className="p-2 bg-slate-50 rounded-lg border border-slate-100 text-xs">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="font-bold text-slate-700">{log.action}</p>
-                          <p className="text-slate-500">{log.user_email || `User #${log.user_id}`}</p>
+                logs.map((log) => (
+                  <div key={log.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div className="flex">
+                      <div
+                        className={`w-1.5 ${log.status === 'success' ? 'bg-emerald-500' : log.status === 'failed' ? 'bg-rose-500' : 'bg-amber-500'}`}
+                      />
+                      <div className="flex-1 p-4">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                          <div>
+                            <p className="text-sm font-black uppercase tracking-[0.16em] text-slate-700">
+                              {String(log.action || 'unknown_action').replace(/_/g, ' ')}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              Actor: {log.actor_role ? formatRole(log.actor_role) : 'System'}
+                              {log.actor_user_id ? ` #${log.actor_user_id}` : ''}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                            <Clock3 size={14} />
+                            {formatDateTime(log.created_at || log.createdAt)}
+                          </div>
                         </div>
-                        <span className="text-slate-400 whitespace-nowrap">
-                          {new Date(log.createdAt).toLocaleString()}
-                        </span>
+
+                        <div className="mt-3 grid gap-3 md:grid-cols-2">
+                          <div className="rounded-xl bg-slate-50 px-3 py-2">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Target</p>
+                            <p className="mt-1 text-sm font-semibold text-slate-700">
+                              {formatRole(log.target_type || 'general')}
+                              {log.target_id ? ` #${log.target_id}` : ''}
+                            </p>
+                          </div>
+                          <div className="rounded-xl bg-slate-50 px-3 py-2">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Status</p>
+                            <p className="mt-1 text-sm font-semibold text-slate-700">{formatRole(log.status || 'success')}</p>
+                          </div>
+                        </div>
+
+                        {log.details && (
+                          <div className="mt-3 rounded-xl bg-slate-950 px-3 py-3 font-mono text-[11px] text-slate-200">
+                            <pre className="whitespace-pre-wrap break-words">
+                              {JSON.stringify(log.details, null, 2)}
+                            </pre>
+                          </div>
+                        )}
                       </div>
-                      {log.resource_type && (
-                        <p className="text-slate-500 mt-1">
-                          {log.resource_type} {log.resource_id && `#${log.resource_id}`}
-                        </p>
-                      )}
                     </div>
-                  ))}
-                </>
+                  </div>
+                ))
               )}
             </div>
           </div>

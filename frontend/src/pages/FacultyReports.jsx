@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import FacultyNavbar from './FacultyNavbar';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const API = 'http://localhost:4000/api';
+const API = 'http://localhost:3000/api';
 
 // --- Reusable Components ---
 

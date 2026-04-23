@@ -14,7 +14,7 @@ import {
 } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
 
-const API_BASE = "http://localhost:4000/api";
+const API_BASE = "http://localhost:3000/api";
 const API_ME = `${API_BASE}/students/me`;
 const API_COURSES_WITH_EXAMS = `${API_BASE}/students/courses-with-exams`;
 const API_SUBMISSIONS_MINE = `${API_BASE}/submissions/mine`;
