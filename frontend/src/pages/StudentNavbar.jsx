@@ -1,12 +1,13 @@
 // src/pages/StudentNavbar.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronDown, LayoutDashboard, ClipboardList, Trophy, User, LogOut, Zap } from 'lucide-react';
+import { ChevronDown, LayoutDashboard, ClipboardList, Trophy, User, LogOut, Zap, MessageSquare } from 'lucide-react';
 import { clearSession } from '../utils/auth';
 
 const navItems = [
   { label: 'Dashboard', path: '/student/dashboard', icon: LayoutDashboard },
   { label: 'Submissions', path: '/student/submissions', icon: ClipboardList },
+  { label: 'Feedback', path: '/student/feedback', icon: MessageSquare },
   { label: 'Scores', path: '/student/score', icon: Trophy },
   { label: 'Profile', path: '/student/profile', icon: User },
 ];

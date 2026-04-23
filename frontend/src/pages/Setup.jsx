@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { ShieldCheck, Lock, Mail, User } from 'lucide-react';
 
-const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000';
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000';
 
 export default function Setup() {
   const navigate = useNavigate();

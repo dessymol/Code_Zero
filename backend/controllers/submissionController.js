@@ -12,6 +12,39 @@ exports.getSubmissionFeedback = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
+
+exports.getAllStudentFeedback = async (req, res) => {
+  try {
+    const studentId = req.user.id; // from studentAuth middleware
+    console.log(`[getAllStudentFeedback] Fetching feedback for student ${studentId}`);
+
+    const feedbackList = await db.SubmissionFeedback.findAll({
+      include: [{
+        model: db.Submission,
+        where: { student_id: studentId },
+        include: [{
+          model: db.Question,
+          attributes: ['title'],
+          include: [{
+            model: db.Course,
+            attributes: ['name']
+          }]
+        }]
+      }],
+      order: [['createdAt', 'DESC']]
+    });
+
+    console.log(`[getAllStudentFeedback] Found ${feedbackList.length} feedback records for student ${studentId}`);
+    if (feedbackList.length > 0) {
+      console.log(`[getAllStudentFeedback] Sample feedback:`, feedbackList[0]);
+    }
+
+    return res.json(feedbackList);
+  } catch (err) {
+    console.error(`[getAllStudentFeedback] Error:`, err.message);
+    return res.status(500).json({ message: err.message });
+  }
+};
 const axios = require('axios');
 const db = require('../models'); // load models/index.js once
 const judge0Service = require('../services/judge0Service');
@@ -317,6 +350,7 @@ exports.submitCode = async (req, res) => {
       const languageName = LANGUAGE_ID_MAP[Number(language_id)] || `Language ${language_id}`;
       const feedbackPayload = {
         code,
+        input: inputToUse,
         languageName,
         question: {
           title: question.title,
@@ -328,9 +362,14 @@ exports.submitCode = async (req, res) => {
         maxScore: question.score
       };
 
+      console.log(`[Feedback] Starting generation for submission ${submissionId}`);
+
       setImmediate(async () => {
         try {
+          console.log(`[Feedback] Calling generateFeedback for submission ${submissionId}`);
           const feedback = await generateFeedback(feedbackPayload);
+          console.log(`[Feedback] Generated feedback for submission ${submissionId}:`, feedback);
+
           await db.SubmissionFeedback.create({
             submission_id: submissionId,
             summary: feedback.summary || null,
@@ -339,16 +378,24 @@ exports.submitCode = async (req, res) => {
             positive: feedback.positive || null,
             status: 'done'
           });
-          console.log(`[Feedback] Generated for submission ${submissionId}`);
+          console.log(`[Feedback] Successfully saved feedback for submission ${submissionId}`);
         } catch (err) {
-          console.warn(`[Feedback] Failed for submission ${submissionId}:`, err.message);
+          console.error(`[Feedback] Failed for submission ${submissionId}:`, err.message);
+          console.error(`[Feedback] Error details:`, err);
           // Silently create a failed record so the frontend knows to stop polling
-          db.SubmissionFeedback.create({
-            submission_id: submissionId,
-            status: 'failed'
-          }).catch(() => { });
+          try {
+            await db.SubmissionFeedback.create({
+              submission_id: submissionId,
+              status: 'failed'
+            });
+            console.log(`[Feedback] Created failed record for submission ${submissionId}`);
+          } catch (createErr) {
+            console.error(`[Feedback] Failed to create failed record:`, createErr.message);
+          }
         }
       });
+    } else {
+      console.log(`[Feedback] Skipping feedback generation - no API key or local provider configured`);
     }
     // ─────────────────────────────────────────────────────────────
 

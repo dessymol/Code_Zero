@@ -28,12 +28,13 @@ const StudentDashboard = lazy(() => import('./pages/StudentDashboard'));
 const StudentProfile = lazy(() => import('./pages/StudentProfile'));
 const StudentSubmissions = lazy(() => import('./pages/StudentSubmissions'));
 const StudentScore = lazy(() => import('./pages/StudentScore'));
+const StudentFeedback = lazy(() => import('./pages/StudentFeedback'));
 const CodingPage = lazy(() => import('./pages/Codingpage'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const Setup = lazy(() => import('./pages/Setup'));
 const SuperAdminDashboard = lazy(() => import('./pages/SuperAdminDashboard'));
 
-const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000';
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000';
 
 const RouteLoader = () => (
   <div className="min-h-screen w-full lms-page-bg flex items-center justify-center">
@@ -125,6 +126,7 @@ function App() {
           <Route path="/student/profile" element={<ProtectedRoute roles={['student']}><StudentProfile /></ProtectedRoute>} />
           <Route path="/student/submissions" element={<ProtectedRoute roles={['student']}><StudentSubmissions /></ProtectedRoute>} />
           <Route path="/student/score" element={<ProtectedRoute roles={['student']}><StudentScore /></ProtectedRoute>} />
+          <Route path="/student/feedback" element={<ProtectedRoute roles={['student']}><StudentFeedback /></ProtectedRoute>} />
 
           {/* 404 */}
           <Route path="*" element={<NotFound />} />

@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   submitCode,
   getSubmissionFeedback,
+  getAllStudentFeedback,
   getCompletedCourses,
   getQuestionsForStudentCourse,
   getAllSubmissionsByCourse,
@@ -39,6 +40,9 @@ router.post('/submit', studentAuth, submitCode);
 
 // Student polls this after submitting
 router.get('/:id/feedback', studentAuth, getSubmissionFeedback);
+
+// Student gets all their feedback
+router.get('/student/feedback', studentAuth, getAllStudentFeedback);
 
 // Student gets their completed courses
 router.get('/completed-courses', studentAuth, getCompletedCourses);

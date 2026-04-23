@@ -8,8 +8,8 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import StudentNavbar from './StudentNavbar';
 
-const API_COURSES = 'http://localhost:3000/api/students/courses-with-exams';
-const API_SUBMISSIONS = 'http://localhost:3000/api/submissions/mine';
+const API_COURSES = 'http://localhost:5000/api/students/courses-with-exams';
+const API_SUBMISSIONS = 'http://localhost:5000/api/submissions/mine';
 
 // Helper to pick an icon based on course name
 function getCourseIcon(name, idx) {

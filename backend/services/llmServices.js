@@ -49,7 +49,7 @@ async function generateTestCases(question, count = 5) {
 
 /**
  * Generate feedback for a submission.
- * @param {object} params - { code, languageName, question, judgeResult, score, maxScore }
+ * @param {object} params - { code, input, languageName, question, judgeResult, score, maxScore }
  * @returns {Promise<{summary, what_went_wrong, hint, positive}>}
  */
 async function generateFeedback(params) {
@@ -82,7 +82,7 @@ Format:
 ]`;
 }
 
-function buildFeedbackPrompt({ code, languageName, question, judgeResult, score, maxScore }) {
+function buildFeedbackPrompt({ code, input, languageName, question, judgeResult, score, maxScore }) {
     const status = judgeResult?.status?.description || 'Unknown';
     const stdout = judgeResult?.stdout || '';
     const stderr = judgeResult?.stderr || '';
@@ -94,6 +94,7 @@ Question: ${question.title}
 Language: ${languageName}
 Score achieved: ${score}/${maxScore}
 Judge status: ${status}
+Input provided: ${input || 'None'}
 Expected output: ${question.sample_output || 'None'}
 ${compileErr ? `\nCompiler error:\n${compileErr}` : ''}
 ${stderr ? `\nRuntime error:\n${stderr}` : ''}
