@@ -499,6 +499,8 @@ exports.getAllSubmissionsByCourse = async (req, res) => {
       output: sub.output,
       execution_time: sub.execution_time,
       score: sub.score,
+      manually_overridden: Boolean(sub.manually_overridden),
+      approved: Boolean(sub.approved),
       createdAt: sub.createdAt
     }));
 
@@ -656,6 +658,8 @@ exports.getCourseSubmissionsForAdmin = async (req, res) => {
       output: s.output,
       execution_time: s.execution_time,
       score: s.score,
+      manually_overridden: Boolean(s.manually_overridden),
+      approved: Boolean(s.approved),
       createdAt: s.createdAt
     }));
 
@@ -713,6 +717,8 @@ exports.getSubmissionsByCourseAndBatch = async (req, res) => {
       output: s.output,
       execution_time: s.execution_time,
       score: s.score,
+      manually_overridden: Boolean(s.manually_overridden),
+      approved: Boolean(s.approved),
       createdAt: s.createdAt
     }));
 
@@ -802,6 +808,8 @@ exports.getCourseSubmissionsForFaculty = async (req, res) => {
       output: s.output,
       execution_time: s.execution_time,
       score: s.score,
+      manually_overridden: Boolean(s.manually_overridden),
+      approved: Boolean(s.approved),
       createdAt: s.createdAt
     }));
 
@@ -887,10 +895,15 @@ exports.approveSubmission = async (req, res) => {
     const submission = await Submission.findByPk(req.params.id);
     if (!submission) return res.status(404).json({ message: 'Submission not found' });
 
-    submission.approved = true;
+    submission.approved = !submission.approved;
     await submission.save();
 
-    return res.json({ success: true, submission });
+    return res.json({
+      success: true,
+      approved: Boolean(submission.approved),
+      message: submission.approved ? 'Submission approved' : 'Submission approval removed',
+      submission
+    });
   } catch (err) {
     return res.status(500).json({ message: err.message });
   }

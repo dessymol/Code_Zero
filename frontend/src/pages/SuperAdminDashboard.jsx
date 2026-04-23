@@ -15,8 +15,6 @@ import {
 import AdminLayout from './AdminLayout';
 
 
-const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000';
-
 const API_ORIGIN =
   import.meta.env.VITE_API_ORIGIN ||
   import.meta.env.VITE_BACKEND_URL ||

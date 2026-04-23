@@ -10,9 +10,6 @@ const RAPIDAPI_KEY = import.meta.env.VITE_RAPIDAPI_KEY || null;
 const RAPIDAPI_HOST = import.meta.env.VITE_RAPIDAPI_HOST || 'judge0-ce.p.rapidapi.com';
 
 
-// Use your backend URL for submissions (not used for routes here, we keep original hardcoded routes)
-const BACKEND_API_URL = import.meta.env.VITE_API_ORIGIN || import.meta.env.VITE_API_URL || 'http://localhost:3000';
-
 // Normalize backend origin so we don't accidentally produce /api/api/... URLs
 const RAW_BACKEND_API_URL =
   import.meta.env.VITE_API_ORIGIN ||
