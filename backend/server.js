@@ -27,6 +27,9 @@ const chatRoutes = require('./chat/routes');
 // password reset routes
 const passwordResetRoutes = require('./routes/passwordReset');
 
+// audit log routes
+const auditRoutes = require('./routes/auditRoutes');
+
 // Load all models (so Sequelize knows them)
 const db = require('./models');
 
@@ -132,6 +135,9 @@ app.use('/api/chats', chatRoutes);
 
 // password reset routes
 app.use('/api/password-reset', passwordResetRoutes);
+
+// audit log routes
+app.use('/api/audit-logs', auditRoutes);
 
 //Excel
 const exportRouter = require(path.join(__dirname, 'excelexports', 'index.js'));

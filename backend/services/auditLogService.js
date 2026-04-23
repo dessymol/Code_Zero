@@ -13,13 +13,12 @@ const writeAuditLog = async ({
 
   try {
     return await AuditLog.create({
-      actor_user_id: actorUserId,
-      actor_role: actorRole,
+      user_id: actorUserId,
       action,
-      target_type: targetType,
-      target_id: targetId == null ? null : String(targetId),
+      resource_type: targetType,
+      resource_id: targetId == null ? null : targetId,
       status,
-      details
+      details: { ...details, actorRole }
     });
   } catch (error) {
     console.error('[AuditLog] Failed to write audit log:', error.message || error);

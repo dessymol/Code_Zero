@@ -11,23 +11,38 @@ const TIMEOUT = parseInt(process.env.LOCAL_LLM_TIMEOUT_MS || '60000', 10);
  * @returns {Promise<string>}
  */
 async function call(prompt) {
-    const response = await axios.post(
-        `${BASE_URL}/api/generate`,
-        {
-            model: MODEL,
-            prompt,
-            stream: false,      // Wait for the full response
-            options: {
-                temperature: 0.2,
-                num_predict: 2048,
-            }
-        },
-        { timeout: TIMEOUT }
-    );
+    try {
+        const response = await axios.post(
+            `${BASE_URL}/api/generate`,
+            {
+                model: MODEL,
+                prompt,
+                stream: false,      // Wait for the full response
+                options: {
+                    temperature: 0.2,
+                    num_predict: 2048,
+                }
+            },
+            { timeout: TIMEOUT }
+        );
 
-    const text = response.data?.response;
-    if (!text) throw new Error('Ollama returned an empty response');
-    return text;
+        const text = response.data?.response;
+        if (!text) throw new Error('Ollama returned an empty response');
+        return text;
+    } catch (err) {
+        // Provide better error messages for common issues
+        if (err.code === 'ECONNREFUSED') {
+            throw new Error(`Ollama is not running or not accessible at ${BASE_URL}. Make sure Ollama is started.`);
+        } else if (err.code === 'ENOTFOUND') {
+            throw new Error(`Cannot reach Ollama server at ${BASE_URL}. Check the LOCAL_LLM_URL configuration.`);
+        } else if (err.message === 'timeout of ' + TIMEOUT + 'ms exceeded') {
+            throw new Error(`Ollama request timed out after ${TIMEOUT}ms. The server may be overloaded.`);
+        } else if (err.response?.status) {
+            throw new Error(`Ollama API error: ${err.response.status} ${err.response.statusText}`);
+        }
+        // Re-throw with original message if not a known error type
+        throw err;
+    }
 }
 
 module.exports = { call };

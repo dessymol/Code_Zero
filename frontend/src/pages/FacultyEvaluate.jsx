@@ -252,16 +252,17 @@ export default function FacultyEvaluate() {
   const approveSubmission = async (submissionId) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.patch(
+      const res = await axios.patch(
         `${API}/submissions/${submissionId}/approve`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      const approved = Boolean(res.data?.approved);
       setAllSubmissions(prev =>
-        prev.map(s => s.id === submissionId ? { ...s, approved: true } : s)
+        prev.map(s => s.id === submissionId ? { ...s, approved } : s)
       );
     } catch (err) {
-      alert('Failed to approve: ' + (err.response?.data?.message || err.message));
+      alert('Failed to update approval: ' + (err.response?.data?.message || err.message));
     }
   };
 
@@ -452,20 +453,22 @@ export default function FacultyEvaluate() {
                             View Submitted Code
                           </button>
                         </div>
-                        {!s.approved ? (
-                          <button
-                            onClick={() => approveSubmission(s.id)}
-                            style={{
-                              padding: '2px 8px', background: '#d1fae5', color: '#065f46',
-                              border: '1px solid #6ee7b7', borderRadius: 4, cursor: 'pointer', fontSize: 11
-                            }}
-                            title="Lock this submission — student cannot re-attempt"
-                          >
-                            Approve
-                          </button>
-                        ) : (
-                          <span style={{ fontSize: 11, color: '#059669', fontWeight: 700 }}>✔ Approved</span>
-                        )}
+                        <button
+                          onClick={() => approveSubmission(s.id)}
+                          style={{
+                            padding: '2px 8px',
+                            background: s.approved ? '#d1fae5' : '#fef2f2',
+                            color: s.approved ? '#065f46' : '#991b1b',
+                            border: `1px solid ${s.approved ? '#6ee7b7' : '#fecaca'}`,
+                            borderRadius: 4,
+                            cursor: 'pointer',
+                            fontSize: 11,
+                            fontWeight: 700
+                          }}
+                          title={s.approved ? 'Remove approval for this submission' : 'Lock this submission so the student cannot re-attempt'}
+                        >
+                          {s.approved ? 'Approved' : 'Approve'}
+                        </button>
                       </div>
                     ))}
                   </div>
