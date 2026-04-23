@@ -39,7 +39,7 @@ export default function FacultyNavbar() {
         const name = user?.name || user?.fullname || user?.fullName || '';
         if (name) setFacultyName(String(name));
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => { mounted = false; };
   }, []);
 

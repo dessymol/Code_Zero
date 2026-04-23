@@ -7,6 +7,18 @@ module.exports = (sequelize, DataTypes) => {
     token: { type: DataTypes.STRING, allowNull: false },
     execution_time: DataTypes.STRING,
     score: DataTypes.INTEGER,
+    manually_overridden: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
+    },
+    approved: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
+    },
+    override_note: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
     question_id: {
       type: DataTypes.INTEGER,
       allowNull: false,

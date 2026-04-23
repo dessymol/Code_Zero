@@ -404,151 +404,169 @@ export default function FacultyDashboard() {
     <>
       <FacultyNavbar />
       <div className="fixed inset-0 top-16 overflow-auto lms-page-bg">
-      <div className="lms-container py-6 md:py-8 min-h-full">
+        <div className="lms-container py-6 md:py-8 min-h-full">
 
-        {/* Header */}
-        <div className="relative mb-8 rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-6 md:p-7 relative z-10 flex flex-col md:flex-row items-center gap-5">
-            <div className="w-16 h-16 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center">
-              <LayoutDashboard size={30} className="text-blue-700" />
-            </div>
+          {/* Header */}
+          <div className="relative mb-8 rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-6 md:p-7 relative z-10 flex flex-col md:flex-row items-center gap-5">
+              <div className="w-16 h-16 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center">
+                <LayoutDashboard size={30} className="text-blue-700" />
+              </div>
 
-            <div className="text-center md:text-left flex-1">
-              <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">
-                Faculty Dashboard
-              </h1>
-              <p className="text-slate-500 text-base md:text-lg">
-                Course management & analytics overview
-              </p>
-            </div>
+              <div className="text-center md:text-left flex-1">
+                <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">
+                  Faculty Dashboard
+                </h1>
+                <p className="text-slate-500 text-base md:text-lg">
+                  Course management & analytics overview
+                </p>
+              </div>
 
-            <div className="flex gap-3">
-              <div className="relative">
-                <button
-                  onClick={() => setIsFilterOpen(!isFilterOpen)}
+              <div className="flex gap-3">
+                <div className="relative">
+                  <button
+                    onClick={() => setIsFilterOpen(!isFilterOpen)}
                     className="lms-btn-secondary h-11 px-4 text-slate-600 flex items-center gap-2"
-                >
-                  <Filter size={20} />
-                  <span>{rangeFilter} Days</span>
-                  <ChevronDown size={14} />
-                </button>
-                {isFilterOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-20">
-                    {[7, 14, 30, 90].map(days => (
-                      <button
-                        key={days}
-                        onClick={() => { setRangeFilter(String(days)); setIsFilterOpen(false); }}
-                        className={`w-full text-left px-4 py-2 hover:bg-slate-50 text-sm font-semibold ${String(days) === rangeFilter ? 'text-blue-600' : 'text-slate-600'}`}
-                      >
-                        Last {days} Days
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={refreshAll}
-                className="lms-btn-primary px-6 text-white flex items-center gap-2"
-              >
-                <RefreshCw size={20} className={loadingSummary ? "animate-spin" : ""} />
-                <span className="hidden md:inline">Refresh</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <StatCard
-            title="Total Courses"
-            value={totalCourses}
-            icon={<BookOpen />}
-            color="#6366f1"
-            loading={loadingSummary}
-            subtitle="Assigned"
-          />
-          <StatCard
-            title="Total Students"
-            value={totalStudents}
-            icon={<Users />}
-            color="#ec4899"
-            loading={loadingSummary}
-            subtitle="Enrolled"
-          />
-          <StatCard
-            title="Submissions"
-            value={totalSubmissions}
-            icon={<TrendingUp />}
-            color="#0ea5e9"
-            loading={loadingSummary}
-            subtitle="Total"
-          />
-          <StatCard
-            title="Avg per Course"
-            value={avgPerCourse}
-            icon={<MessageCircle />}
-            color="#10b981"
-            loading={loadingSummary}
-            subtitle="Submissions"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-
-          {/* Left Column: Course Status & Submissions Trend */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* Status */}
-            <div className="lms-card p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2.5 rounded-xl bg-purple-100 text-purple-600">
-                  <ClipboardList size={24} />
-                </div>
-                <h3 className="text-lg font-bold text-slate-800">Status</h3>
-              </div>
-              <Donut data={statusCounts} subtitle="Courses" size={140} />
-            </div>
-
-            {/* Recent Subs Preview */}
-            <div className="lms-card p-6 flex flex-col h-[400px]">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2.5 rounded-xl bg-blue-100 text-blue-600">
-                  <FileText size={24} />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-800">Activity</h3>
-                  <p className="text-xs text-slate-500 font-bold">Recent Submissions</p>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-1">
-                {loadingSubs ? (
-                  <div className="text-center py-6 text-slate-400">Loading...</div>
-                ) : recentSubs.length === 0 ? (
-                  <div className="text-center py-6 text-slate-400 italic">No recent activity</div>
-                ) : (
-                  recentSubs.map((s, i) => (
-                    <div key={s.id || i} className="p-3 bg-white rounded-xl border border-slate-100 shadow-sm hover:border-blue-200 transition-colors">
-                      <div className="flex justify-between items-start mb-1">
-                        <span className="text-xs font-bold text-slate-700 truncate max-w-[70%]">{s.student_name || s.studentName}</span>
-                        <span className="text-[10px] font-medium text-slate-400">{new Date(s.createdAt).toLocaleDateString()}</span>
-                      </div>
-                      <div className="text-[10px] text-slate-500 font-medium truncate mb-2">{s.course_name}</div>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getSubmissionBadge(s).className}`}>
-                          {getSubmissionBadge(s).label}
-                        </span>
-                      </div>
+                  >
+                    <Filter size={20} />
+                    <span>{rangeFilter} Days</span>
+                    <ChevronDown size={14} />
+                  </button>
+                  {isFilterOpen && (
+                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-20">
+                      {[7, 14, 30, 90].map(days => (
+                        <button
+                          key={days}
+                          onClick={() => { setRangeFilter(String(days)); setIsFilterOpen(false); }}
+                          className={`w-full text-left px-4 py-2 hover:bg-slate-50 text-sm font-semibold ${String(days) === rangeFilter ? 'text-blue-600' : 'text-slate-600'}`}
+                        >
+                          Last {days} Days
+                        </button>
+                      ))}
                     </div>
-                  ))
-                )}
+                  )}
+                </div>
+                <button
+                  onClick={refreshAll}
+                  className="lms-btn-primary px-6 text-white flex items-center gap-2"
+                >
+                  <RefreshCw size={20} className={loadingSummary ? "animate-spin" : ""} />
+                  <span className="hidden md:inline">Refresh</span>
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Middle Column: Detailed Stats */}
-          <div className="lg:col-span-1 xl:col-span-2 space-y-6">
-            {/* Sparkline */}
-            <div className="lms-card p-6">
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <StatCard
+              title="Total Courses"
+              value={totalCourses}
+              icon={<BookOpen />}
+              color="#6366f1"
+              loading={loadingSummary}
+              subtitle="Assigned"
+            />
+            <StatCard
+              title="Total Students"
+              value={totalStudents}
+              icon={<Users />}
+              color="#ec4899"
+              loading={loadingSummary}
+              subtitle="Enrolled"
+            />
+            <StatCard
+              title="Submissions"
+              value={totalSubmissions}
+              icon={<TrendingUp />}
+              color="#0ea5e9"
+              loading={loadingSummary}
+              subtitle="Total"
+            />
+            <StatCard
+              title="Avg per Course"
+              value={avgPerCourse}
+              icon={<MessageCircle />}
+              color="#10b981"
+              loading={loadingSummary}
+              subtitle="Submissions"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+
+            {/* Left Column: Course Status & Submissions Trend */}
+            <div className="lg:col-span-1 space-y-6">
+              {/* Status */}
+              <div className="lms-card p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2.5 rounded-xl bg-purple-100 text-purple-600">
+                    <ClipboardList size={24} />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-800">Status</h3>
+                </div>
+                <Donut data={statusCounts} subtitle="Courses" size={140} />
+              </div>
+
+              {/* Recent Subs Preview */}
+              <div className="lms-card p-6 flex flex-col h-[400px]">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2.5 rounded-xl bg-blue-100 text-blue-600">
+                    <FileText size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">Activity</h3>
+                    <p className="text-xs text-slate-500 font-bold">Recent Submissions</p>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-1">
+                  {loadingSubs ? (
+                    <div className="text-center py-6 text-slate-400">Loading...</div>
+                  ) : recentSubs.length === 0 ? (
+                    <div className="text-center py-6 text-slate-400 italic">No recent activity</div>
+                  ) : (
+                    recentSubs.map((s, i) => {
+                      const submissionBadge = getSubmissionBadge(s);
+
+                      return (
+                        <div
+                          key={s.id || i}
+                          className="p-3 bg-white rounded-xl border border-slate-100 shadow-sm hover:border-blue-200 transition-colors"
+                        >
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="text-xs font-bold text-slate-700 truncate max-w-[70%]">
+                              {s.student_name || s.studentName}
+                            </span>
+                            <span className="text-[10px] font-medium text-slate-400">
+                              {new Date(s.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-slate-500 font-medium truncate mb-2">{s.course_name}</div>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${submissionBadge.className}`}>
+                              {submissionBadge.label}
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                s.verdict === 'Accepted' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                              }`}
+                            >
+                              {s.verdict || 'Pending'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Middle Column: Detailed Stats */}
+            <div className="lg:col-span-1 xl:col-span-2 space-y-6">
+              {/* Sparkline */}
+              <div className="lms-card p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 rounded-xl bg-emerald-100 text-emerald-600">
@@ -561,10 +579,10 @@ export default function FacultyDashboard() {
               <div className="h-[150px]">
                 <AreaSpark points={areaTimeseries} height={150} color="#10b981" />
               </div>
-            </div>
+              </div>
 
-            {/* Students & Submissions Bar Lists */}
-            <div className="lms-card p-6 min-h-[300px]">
+              {/* Students & Submissions Bar Lists */}
+              <div className="lms-card p-6 min-h-[300px]">
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2.5 rounded-xl bg-orange-100 text-orange-600">
                   <LayoutDashboard size={24} />
@@ -582,13 +600,13 @@ export default function FacultyDashboard() {
                   <CourseBarList items={groupedSeries[1].values} />
                 </div>
               </div>
+              </div>
             </div>
-          </div>
 
-          {/* Right Column: Messages & Quick Actions */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* Messages */}
-            <div className="lms-card p-6 flex flex-col h-[500px]">
+            {/* Right Column: Messages & Quick Actions */}
+            <div className="lg:col-span-1 space-y-6">
+              {/* Messages */}
+              <div className="lms-card p-6 flex flex-col h-[500px]">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2.5 rounded-xl bg-pink-100 text-pink-600">
                   <MessageSquare size={24} />
@@ -619,12 +637,12 @@ export default function FacultyDashboard() {
                   ))
                 )}
               </div>
+              </div>
             </div>
-          </div>
 
+          </div>
         </div>
       </div>
-    </div>
     </>
   );
 }
