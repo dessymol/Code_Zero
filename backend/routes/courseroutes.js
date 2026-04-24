@@ -34,4 +34,5 @@ router.get('/:courseId/faculties', authMiddleware, roleMiddleware('admin', 'facu
 router.post('/:courseId/assign-faculties', adminAuth, assignFacultiesToCourse);
 router.get('/:id', getCourseByIdForAdmin);
 
+
 module.exports = router;

@@ -6,7 +6,8 @@ import {
   Lightbulb, Star, Calendar
 } from 'lucide-react';
 
-const API_FEEDBACK = 'http://localhost:5000/api/submissions/student/feedback';
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000';
+const API_FEEDBACK = `${API_ORIGIN}/api/submissions/student/feedback`;
 
 export default function StudentFeedback() {
   const [feedback, setFeedback] = useState([]);
@@ -22,11 +23,25 @@ export default function StudentFeedback() {
         const token = localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
         const res = await axios.get(API_FEEDBACK, { headers });
-        const data = res?.data ?? [];
+        const rawData = res?.data;
+        const data = Array.isArray(rawData)
+          ? rawData
+          : Array.isArray(rawData?.feedback)
+            ? rawData.feedback
+            : Array.isArray(rawData?.submissions)
+              ? rawData.submissions
+              : [];
         if (mounted) setFeedback(data);
       } catch (err) {
         console.error('Failed to load feedback:', err);
-        setError('Failed to load feedback');
+        if (mounted) {
+          setFeedback([]);
+          setError(
+            err?.code === 'ERR_NETWORK'
+              ? 'Unable to reach the backend server'
+              : 'Failed to load feedback'
+          );
+        }
       } finally {
         if (mounted) setLoading(false);
       }

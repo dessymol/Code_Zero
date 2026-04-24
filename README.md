@@ -96,6 +96,6 @@ See `CodeZeroLMS_Documentation.docx` for full application documentation includin
 
 ---
 
-*CodeZero LMS · ICTAK · Author: Gokul*
+*CodeZero LMS · ICTAK · Author: Alishia,Anusree,Dessymol,Gowri,Prince*
 # code_zero
 # code_zero

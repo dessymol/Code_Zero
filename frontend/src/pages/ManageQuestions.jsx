@@ -10,8 +10,8 @@ import { io } from 'socket.io-client';
 import FacultyNavbar from './FacultyNavbar';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const API = `${import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000'}/api`;
-const SOCKET_URL = import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000';
+const API = `${import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000'}/api`;
+const SOCKET_URL = import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000';
 import { useToast } from '../context/ToastContext';
 const MotionDiv = motion.div;
 
