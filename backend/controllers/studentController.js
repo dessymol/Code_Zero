@@ -21,7 +21,7 @@ const {
 } = require('../models');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'secretkey';
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_REGEX = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.com$/i;
 const TEMPLATE_TYPES = {
   students: {
     key: 'students',
@@ -164,14 +164,23 @@ exports.getAllStudents = async (req, res, next) => {
 exports.addStudent = async (req, res, next) => {
   try {
     const { name, email, phone, course_code, batchId, batch_code } = req.body;
-    if (!name || !email || !course_code) {
+    const trimmedName = String(name || '').trim();
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    const normalizedPhone = String(phone || '').trim();
+    const normalizedCourseCode = String(course_code || '').trim();
+
+    if (!trimmedName || !normalizedEmail || !normalizedCourseCode) {
       return res.status(400).json({ success: false, message: 'Name, email and course_code are required' });
     }
 
-    const course = await Course.findOne({ where: { course_code } });
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
+      return res.status(400).json({ success: false, message: 'Invalid .com email format' });
+    }
+
+    const course = await Course.findOne({ where: { course_code: normalizedCourseCode } });
     if (!course) return res.status(404).json({ success: false, message: 'Course not found' });
 
-    const existing = await Student.findOne({ where: { email } });
+    const existing = await Student.findOne({ where: { email: normalizedEmail } });
     if (existing) {
       // If a student exists, optionally assign to batch if provided
       if (batchId || batch_code) {
@@ -190,7 +199,7 @@ exports.addStudent = async (req, res, next) => {
     const hashed = await bcrypt.hash(rawPassword, 10);
 
     // create student record
-    const student = await Student.create({ name, email, phone, password: hashed });
+    const student = await Student.create({ name: trimmedName, email: normalizedEmail, phone: normalizedPhone, password: hashed });
 
     // add to course (student-course relationship)
     if (typeof student.addCourse === 'function') {
@@ -367,6 +376,10 @@ exports.uploadStudents = async (req, res, next) => {
         const email = String(r.Email || r.email || '').trim().toLowerCase();
         const phone = String(r.Phone || r.phone || '').trim();
         if (!name || !email) continue;
+        if (!EMAIL_REGEX.test(email)) {
+          failures.push({ row: r, error: 'Invalid .com email format' });
+          continue;
+        }
 
         const exists = await Student.findOne({ where: { email } });
         if (exists) {
@@ -447,9 +460,27 @@ exports.updateStudent = async (req, res, next) => {
     const student = await Student.findByPk(id);
     if (!student) return res.status(404).json({ success: false, message: 'Student not found' });
 
-    if (name != null) student.name = name;
-    if (email != null) student.email = email;
-    if (phone != null) student.phone = phone;
+    if (name != null) student.name = String(name).trim();
+    if (email != null) {
+      const normalizedEmail = String(email).trim().toLowerCase();
+      if (!EMAIL_REGEX.test(normalizedEmail)) {
+        return res.status(400).json({ success: false, message: 'Invalid .com email format' });
+      }
+
+      const existingStudent = await Student.findOne({
+        where: {
+          email: normalizedEmail,
+          id: { [Op.ne]: student.id }
+        }
+      });
+
+      if (existingStudent) {
+        return res.status(409).json({ success: false, message: 'Email already exists' });
+      }
+
+      student.email = normalizedEmail;
+    }
+    if (phone != null) student.phone = String(phone).trim();
     await student.save();
 
     if (batchOp === 'add' || batchOp === 'remove') {

@@ -21,6 +21,8 @@ const { writeAuditLog } = require('../services/auditLogService');
 
 
 const router = express.Router();
+const EMAIL_REGEX = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.com$/i;
+const PHONE_REGEX = /^[6-9]\d{9}$/;
 
 
 // ✅ Public route to fetch all users (No auth, for testing/demo)
@@ -38,12 +40,24 @@ router.get('/all-users', authMiddleware, roleMiddleware('admin'), async (req, re
 router.post('/create-admin', authMiddleware, roleMiddleware('admin'), async (req, res, next) => {
   try {
     const { name, email, phone, password } = req.body;
-    if (!name || !email ||!phone|| !password) {
-      throw new ApiError(400, 'Name, email and password are required');
+    const trimmedName = String(name || '').trim();
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    const normalizedPhone = String(phone || '').trim();
+
+    if (!trimmedName || !normalizedEmail || !normalizedPhone || !password) {
+      throw new ApiError(400, 'Name, email, phone, and password are required');
+    }
+
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
+      throw new ApiError(400, 'Please provide a valid .com email address');
+    }
+
+    if (!PHONE_REGEX.test(normalizedPhone)) {
+      throw new ApiError(400, 'Please provide a valid 10-digit phone number');
     }
 
     // ✅ Check if user already exists (Sequelize + MySQL)
-    const existingUser = await User.findOne({ where: { email } });
+    const existingUser = await User.findOne({ where: { email: normalizedEmail } });
     if (existingUser) {
       throw new ApiError(400, 'User already exists with this email');
     }
@@ -53,9 +67,9 @@ router.post('/create-admin', authMiddleware, roleMiddleware('admin'), async (req
 
     // ✅ Create admin user
     const newAdmin = await User.create({
-      name,
-      email,
-      phone,
+      name: trimmedName,
+      email: normalizedEmail,
+      phone: normalizedPhone,
       password: hashedPassword,
       role: 'admin'
     });
