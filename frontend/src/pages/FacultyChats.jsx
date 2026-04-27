@@ -5,7 +5,7 @@ import axios from 'axios';
 import { motion } from 'framer-motion';
 import FacultyNavbar from './FacultyNavbar';
 
-const API = 'http://localhost:5000/api';
+const API = 'http://localhost:3000/api';
 const ACCENTS = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#dc2626', '#0891b2'];
 
 export default function FacultyChats() {

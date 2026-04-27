@@ -10,8 +10,8 @@ import { io } from 'socket.io-client';
 import FacultyNavbar from './FacultyNavbar';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const API = `${import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000'}/api`;
-const SOCKET_URL = import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000';
+const API = `${import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000'}/api`;
+const SOCKET_URL = import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000';
 import { useToast } from '../context/ToastContext';
 const MotionDiv = motion.div;
 
@@ -22,7 +22,7 @@ const LANGUAGES = [
   { id: 63, name: 'JavaScript', color: '#f7df1e', icon: '⚡' },
   { id: 54, name: 'C++', color: '#00599c', icon: '⚙️' },
   { id: 50, name: 'C', color: '#a8b9cc', icon: '🔧' },
-  { id: 70, name: 'Python3', color: '#3776ab', icon: '🐍' },
+  { id: 70, name: 'Python 2', color: '#3776ab', icon: '🐍' },
 ];
 
 // --- Reuseable Components ---
@@ -99,6 +99,7 @@ export default function ManageQuestions() {
   const [form, setForm] = useState({
     title: '', description: '', sample_input: '', sample_output: '', language_id: LANGUAGES[0].id, score: 100,
   });
+  const [testcases, setTestcases] = useState([]);
   const [saving, setSaving] = useState(false);
   const [testcaseDialogOpen, setTestcaseDialogOpen] = useState(false);
   const [testcaseQuestion, setTestcaseQuestion] = useState(null);
@@ -145,6 +146,7 @@ export default function ManageQuestions() {
           description: r.description,
           sample_input: r.sample_input,
           sample_output: r.sample_output,
+          reference_solution: r.reference_solution,
           language_id: r.language_id ?? r.languageId ?? LANGUAGES[0].id,
           language: r.language,
           score: r.score ?? r.points ?? r.marks ?? 100,

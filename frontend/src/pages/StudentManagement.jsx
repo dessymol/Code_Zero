@@ -11,9 +11,10 @@ import { useToast } from '../context/ToastContext';
 import Skeleton from '../components/Skeleton';
 import Pagination from '../components/Pagination';
 
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = 'http://localhost:3000/api';
 const API_COURSES = `${API_BASE}/courses/get-all-courses`;
 const API_STUDENTS = `${API_BASE}/students`;
+const EMAIL_REGEX = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.com$/i;
 
 // --- Components ---
 
@@ -97,6 +98,7 @@ const StudentManagement = () => {
   const [templateLoading, setTemplateLoading] = useState(false);
   const [templateUploading, setTemplateUploading] = useState(false);
   const [phoneError, setPhoneError] = useState({ add: false, edit: false });
+  const [emailError, setEmailError] = useState({ add: false, edit: false });
 
   // search/snack
   const [searchQuery, setSearchQuery] = useState('');
@@ -119,6 +121,22 @@ const StudentManagement = () => {
   const validatePhone = (phone) => {
     return /^\d{10}$/.test(phone) && /^[6-9]/.test(phone);
   }
+
+  const validateEmail = (email) => {
+    return EMAIL_REGEX.test(String(email || '').trim().toLowerCase());
+  };
+
+  const handleAddEmailChange = (e) => {
+    const val = e.target.value;
+    setAddForm(prev => ({ ...prev, email: val }));
+    setEmailError(prev => ({ ...prev, add: val.length > 0 && !validateEmail(val) }));
+  };
+
+  const handleEditEmailChange = (e) => {
+    const val = e.target.value;
+    setEditForm(prev => ({ ...prev, email: val }));
+    setEmailError(prev => ({ ...prev, edit: val.length > 0 && !validateEmail(val) }));
+  };
 
   const handleAddPhoneChange = (e) => {
     const val = e.target.value;
@@ -331,10 +349,15 @@ const StudentManagement = () => {
       const selectedCourse = courses.find(c => String(c.id) === String(courseId));
       if (!selectedCourse) { toast.error('Select a course first'); return; }
       if (!selectedBatchName || !selectedBatchCode) { toast.error('Select batch name and code'); return; }
+      if (!validateEmail(addForm.email)) {
+        setEmailError(prev => ({ ...prev, add: true }));
+        toast.error('Enter a valid .com email address');
+        return;
+      }
 
       const payload = {
         name: addForm.name,
-        email: addForm.email,
+        email: addForm.email.trim().toLowerCase(),
         phone: addForm.phone,
         course_code: selectedCourse.course_code
       };
@@ -349,6 +372,7 @@ const StudentManagement = () => {
       setOpenAdd(false);
       await loadStudents(courseId, selectedBatchId || '');
       setAddForm({ name: '', email: '', phone: '' });
+      setEmailError({ add: false, edit: false });
       toast.success('Student added successfully!');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Add student failed');
@@ -357,15 +381,21 @@ const StudentManagement = () => {
 
   const openEditDialog = (student) => {
     setEditForm({ id: student.id, name: student.name || '', email: student.email || '', phone: student.phone || '' });
+    setEmailError(prev => ({ ...prev, edit: false }));
     setOpenEdit(true);
   };
 
   const handleUpdateStudent = async () => {
     try {
       if (!editForm.id) return;
+      if (!validateEmail(editForm.email)) {
+        setEmailError(prev => ({ ...prev, edit: true }));
+        toast.error('Enter a valid .com email address');
+        return;
+      }
       await axios.put(`${API_STUDENTS}/update/${editForm.id}`, {
         name: editForm.name,
-        email: editForm.email,
+        email: editForm.email.trim().toLowerCase(),
         phone: editForm.phone
       }, { headers: authHeader });
       setOpenEdit(false);
@@ -896,10 +926,11 @@ const StudentManagement = () => {
             <label className="block text-sm font-bold text-slate-700 mb-1">Email Address</label>
             <input
               type="email"
-              className="lms-input"
+              className={`lms-input ${emailError.add ? 'border-red-500 ring-red-100 focus:ring-red-100 focus:border-red-500' : ''}`}
               value={addForm.email}
-              onChange={e => setAddForm(prev => ({ ...prev, email: e.target.value }))}
+              onChange={handleAddEmailChange}
             />
+            {emailError.add && <p className="text-red-500 text-xs mt-1 font-medium">Enter a valid .com email address</p>}
           </div>
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-1">Phone Number (Optional)</label>
@@ -930,7 +961,7 @@ const StudentManagement = () => {
               label="Add Student"
               variant="primary"
               onClick={handleAdd}
-              disabled={!addForm.name || !addForm.email || phoneError.add}
+              disabled={!addForm.name || !addForm.email || phoneError.add || emailError.add}
             />
           </div>
         </div>
@@ -952,10 +983,11 @@ const StudentManagement = () => {
             <label className="block text-sm font-bold text-slate-700 mb-1">Email Address</label>
             <input
               type="email"
-              className="lms-input"
+              className={`lms-input ${emailError.edit ? 'border-red-500 ring-red-100 focus:ring-red-100 focus:border-red-500' : ''}`}
               value={editForm.email}
-              onChange={e => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+              onChange={handleEditEmailChange}
             />
+            {emailError.edit && <p className="text-red-500 text-xs mt-1 font-medium">Enter a valid .com email address</p>}
           </div>
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-1">Phone Number</label>
@@ -976,7 +1008,7 @@ const StudentManagement = () => {
               label="Save Changes"
               variant="primary"
               onClick={handleUpdateStudent}
-              disabled={!editForm.name || !editForm.email || phoneError.edit}
+              disabled={!editForm.name || !editForm.email || phoneError.edit || emailError.edit}
             />
           </div>
         </div>

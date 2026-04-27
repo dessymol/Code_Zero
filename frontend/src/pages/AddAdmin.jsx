@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import AdminLayout from './AdminLayout';
 
-const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000';
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000';
 const API_USERS = `${API_ORIGIN}/api/v1/users`;
 const API_ALL_USERS = `${API_USERS}/all-users`;
 const API_COURSES = `${API_ORIGIN}/api/courses`;
@@ -54,6 +54,9 @@ const getCreatedDate = (item) => item?.createdAt || item?.created_at || item?.cr
 const getEntityId = (item) =>
   item?.id ?? item?._id ?? item?.courseId ?? item?.course_id ?? item?.course_code ?? item?.code ?? item?.name;
 
+const EMAIL_REGEX = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.com$/i;
+const PHONE_REGEX = /^[6-9]\d{9}$/;
+
 export default function AddAdmin() {
   const [admins, setAdmins] = useState([]);
   const [courses, setCourses] = useState([]);
@@ -68,6 +71,7 @@ export default function AddAdmin() {
   const [debugLogs, setDebugLogs] = useState([]);
 
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
+  const [fieldErrors, setFieldErrors] = useState({ email: '', phone: '' });
 
   const pushDebug = useCallback((label, payload) => {
     setDebugLogs((prev) => [{ ts: new Date().toLocaleString(), label, payload }, ...prev].slice(0, 200));
@@ -161,6 +165,23 @@ export default function AddAdmin() {
     fetchAll();
   }, [fetchAll]);
 
+  const validateForm = useCallback(() => {
+    const nextErrors = { email: '', phone: '' };
+    const normalizedEmail = form.email.trim().toLowerCase();
+    const normalizedPhone = form.phone.trim();
+
+    if (normalizedEmail && !EMAIL_REGEX.test(normalizedEmail)) {
+      nextErrors.email = 'Enter a valid .com email address.';
+    }
+
+    if (normalizedPhone && !PHONE_REGEX.test(normalizedPhone)) {
+      nextErrors.phone = 'Enter a valid 10-digit phone number starting with 6-9.';
+    }
+
+    setFieldErrors(nextErrors);
+    return !nextErrors.email && !nextErrors.phone;
+  }, [form.email, form.phone]);
+
   const handleAdd = useCallback(async () => {
     setAddError('');
     setSuccessMsg('');
@@ -170,12 +191,26 @@ export default function AddAdmin() {
       return;
     }
 
+    if (!validateForm()) {
+      setAddError('Please fix the highlighted fields.');
+      return;
+    }
+
     setAdding(true);
     try {
-      await axios.post(`${API_USERS}/create-admin`, form, { headers: getAuthHeaders() });
+      await axios.post(
+        `${API_USERS}/create-admin`,
+        {
+          ...form,
+          email: form.email.trim().toLowerCase(),
+          phone: form.phone.trim()
+        },
+        { headers: getAuthHeaders() }
+      );
       setSuccessMsg('Admin created successfully.');
       pushDebug('POST /users/create-admin', { ok: true });
       setForm({ name: '', email: '', phone: '', password: '' });
+      setFieldErrors({ email: '', phone: '' });
       await fetchAll();
     } catch (error) {
       const message = getRequestErrorMessage(error);
@@ -184,7 +219,7 @@ export default function AddAdmin() {
     } finally {
       setAdding(false);
     }
-  }, [fetchAll, form, pushDebug]);
+  }, [fetchAll, form, pushDebug, validateForm]);
 
   const exportCSV = (rows, filename = 'export.csv') => {
     try {
@@ -324,6 +359,11 @@ export default function AddAdmin() {
                 </div>
 
                 <div className="space-y-4 p-6">
+                  <form autoComplete="off" onSubmit={(event) => event.preventDefault()} className="hidden">
+                    <input type="text" name="username" autoComplete="username" />
+                    <input type="password" name="password" autoComplete="current-password" />
+                  </form>
+
                   {addError && (
                     <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-medium text-rose-700">
                       {addError}
@@ -335,6 +375,14 @@ export default function AddAdmin() {
                     </div>
                   )}
 
+                  <form
+                    autoComplete="off"
+                    className="space-y-4"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      handleAdd();
+                    }}
+                  >
                   <div>
                     <label className="mb-1.5 ml-1 block text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
                       Full Name
@@ -343,6 +391,8 @@ export default function AddAdmin() {
                       <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                       <input
                         type="text"
+                        name="new-admin-name"
+                        autoComplete="off"
                         value={form.name}
                         onChange={(event) => setForm({ ...form, name: event.target.value })}
                         placeholder="John Admin"
@@ -359,12 +409,29 @@ export default function AddAdmin() {
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                       <input
                         type="email"
+                        name="new-admin-email"
+                        autoComplete="off"
                         value={form.email}
-                        onChange={(event) => setForm({ ...form, email: event.target.value })}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setForm({ ...form, email: value });
+                          setFieldErrors((prev) => ({
+                            ...prev,
+                            email:
+                              value && !EMAIL_REGEX.test(value.trim().toLowerCase())
+                                ? 'Enter a valid .com email address.'
+                                : ''
+                          }));
+                        }}
                         placeholder="admin@example.com"
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                        className={`w-full rounded-xl bg-slate-50 py-2.5 pl-10 pr-4 text-slate-700 outline-none transition focus:ring-2 ${
+                          fieldErrors.email
+                            ? 'border border-rose-300 focus:border-rose-500 focus:ring-rose-500/20'
+                            : 'border border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/20'
+                        }`}
                       />
                     </div>
+                    {fieldErrors.email && <p className="mt-1 ml-1 text-xs font-medium text-rose-600">{fieldErrors.email}</p>}
                   </div>
 
                   <div>
@@ -374,13 +441,32 @@ export default function AddAdmin() {
                     <div className="relative">
                       <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                       <input
-                        type="text"
+                        type="tel"
+                        name="new-admin-phone"
+                        autoComplete="off"
+                        inputMode="numeric"
+                        maxLength={10}
                         value={form.phone}
-                        onChange={(event) => setForm({ ...form, phone: event.target.value })}
-                        placeholder="+91 9876543210"
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                        onChange={(event) => {
+                          const value = event.target.value.replace(/\D/g, '').slice(0, 10);
+                          setForm({ ...form, phone: value });
+                          setFieldErrors((prev) => ({
+                            ...prev,
+                            phone:
+                              value && !PHONE_REGEX.test(value)
+                                ? 'Enter a valid 10-digit phone number starting with 6-9.'
+                                : ''
+                          }));
+                        }}
+                        placeholder="9876543210"
+                        className={`w-full rounded-xl bg-slate-50 py-2.5 pl-10 pr-4 text-slate-700 outline-none transition focus:ring-2 ${
+                          fieldErrors.phone
+                            ? 'border border-rose-300 focus:border-rose-500 focus:ring-rose-500/20'
+                            : 'border border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/20'
+                        }`}
                       />
                     </div>
+                    {fieldErrors.phone && <p className="mt-1 ml-1 text-xs font-medium text-rose-600">{fieldErrors.phone}</p>}
                   </div>
 
                   <div>
@@ -391,6 +477,8 @@ export default function AddAdmin() {
                       <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                       <input
                         type="password"
+                        name="new-admin-password"
+                        autoComplete="new-password"
                         value={form.password}
                         onChange={(event) => setForm({ ...form, password: event.target.value })}
                         placeholder="••••••••"
@@ -401,13 +489,17 @@ export default function AddAdmin() {
 
                   <div className="flex gap-3 pt-4">
                     <button
-                      onClick={() => setForm({ name: '', email: '', phone: '', password: '' })}
+                      type="button"
+                      onClick={() => {
+                        setForm({ name: '', email: '', phone: '', password: '' });
+                        setFieldErrors({ email: '', phone: '' });
+                      }}
                       className="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 font-bold text-slate-600 transition hover:bg-slate-50"
                     >
                       Clear
                     </button>
                     <button
-                      onClick={handleAdd}
+                      type="submit"
                       disabled={adding}
                       className="flex flex-[2] items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-600 py-2.5 font-bold text-white transition hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
                     >
@@ -415,6 +507,7 @@ export default function AddAdmin() {
                       Create Admin
                     </button>
                   </div>
+                  </form>
                 </div>
               </div>
 

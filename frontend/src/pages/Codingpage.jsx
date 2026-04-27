@@ -16,7 +16,7 @@ const RAW_BACKEND_API_URL =
   import.meta.env.VITE_API_ORIGIN ||
   import.meta.env.VITE_BACKEND_URL ||
   import.meta.env.VITE_API_URL ||
-  'http://localhost:5000';
+  'http://localhost:3000';
 const BACKEND_API_URL = RAW_BACKEND_API_URL.replace(/\/api\/?$/, '');
 const EXAM_STATUS_API = `${BACKEND_API_URL}/api/submissions/exam-status`;
 const EXAM_VIOLATION_API = `${BACKEND_API_URL}/api/submissions/exam-violations`;
