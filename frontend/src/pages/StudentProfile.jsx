@@ -200,6 +200,16 @@ export default function StudentProfile() {
     }
     return sum;
   }, 0) : 0;
+  const totalPossibleScore = Array.isArray(submissions) ? (() => {
+    const seenQuestionIds = new Set();
+    return submissions.reduce((sum, s) => {
+      const questionId = s?.question_id ?? s?.questionId ?? s?.Question?.id;
+      if (questionId == null || seenQuestionIds.has(questionId)) return sum;
+      seenQuestionIds.add(questionId);
+      const maxScore = Number(s?.maxScore ?? s?.Question?.score);
+      return sum + (Number.isNaN(maxScore) ? 0 : maxScore);
+    }, 0);
+  })() : 0;
 
   const acceptanceRate = submissionCount > 0 ? Math.round((acceptedCount / submissionCount) * 100) : 0;
 
@@ -363,7 +373,7 @@ export default function StudentProfile() {
           {tab === 'overview' && (
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="md:col-span-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard title="Total Score" value={totalScore} icon={Medal} color="indigo" subtitle={`${acceptedCount} Accepted`} />
+                <StatCard title="Scored Score" value={`${totalScore} / ${totalPossibleScore}`} icon={Medal} color="indigo" subtitle={`${acceptedCount} Accepted`} />
                 <StatCard title="Submissions" value={submissionCount} icon={Upload} color="emerald" subtitle={`${acceptanceRate}% Success Rate`} />
                 <StatCard title="Courses" value={courses.length} icon={Book} color="cyan" subtitle="Active" />
                 <StatCard title="Performance" value={`${acceptanceRate}%`} icon={Activity} color="amber" subtitle="Overall" />

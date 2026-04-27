@@ -6,7 +6,51 @@ import {
   Lightbulb, Star, Calendar
 } from 'lucide-react';
 
-const API_FEEDBACK = 'http://localhost:5000/api/submissions/student/feedback';
+const API_ORIGIN =
+  import.meta.env.VITE_API_ORIGIN ||
+  import.meta.env.VITE_BACKEND_URL ||
+  (import.meta.env.VITE_API_URL
+    ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '')
+    : 'http://localhost:5000');
+
+const API_FEEDBACK = `${API_ORIGIN}/api/submissions/student/feedback`;
+
+const normalizeFeedbackList = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.feedback)) return payload.feedback;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (!payload || typeof payload !== 'object') return [];
+
+  const keys = Object.keys(payload);
+  const looksLikeErrorPayload =
+    keys.length === 0 ||
+    (keys.length <= 3 && ('message' in payload || 'status' in payload || 'error' in payload));
+
+  if (looksLikeErrorPayload) {
+    return [];
+  }
+
+  if (keys.length > 0) {
+    return [payload];
+  }
+  return [];
+};
+
+const getFeedbackErrorMessage = (err) => {
+  if (axios.isAxiosError(err)) {
+    if (!err.response) {
+      return `Cannot reach the backend at ${API_ORIGIN}. Make sure the API server is running.`;
+    }
+
+    if (err.response.status === 401) {
+      return 'Your session has expired. Please log in again to view feedback.';
+    }
+
+    return err.response.data?.message || 'Failed to load feedback';
+  }
+
+  return 'Failed to load feedback';
+};
 
 export default function StudentFeedback() {
   const [feedback, setFeedback] = useState([]);
@@ -22,11 +66,11 @@ export default function StudentFeedback() {
         const token = localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
         const res = await axios.get(API_FEEDBACK, { headers });
-        const data = res?.data ?? [];
+        const data = normalizeFeedbackList(res?.data);
         if (mounted) setFeedback(data);
       } catch (err) {
         console.error('Failed to load feedback:', err);
-        setError('Failed to load feedback');
+        if (mounted) setError(getFeedbackErrorMessage(err));
       } finally {
         if (mounted) setLoading(false);
       }

@@ -16,7 +16,9 @@ const {
   getSupportedLanguages,
   getSubmissionStatus,
   approveSubmission,
-  overrideScore
+  overrideScore,
+  getExamViolationStatus,
+  recordExamViolation
 } = require('../controllers/submissionController');
 const { studentAuth, facultyAuth, adminAuth, authMiddleware, roleMiddleware } = require('../Middleware/authmiddleware');
 // ========================
@@ -74,5 +76,7 @@ router.get(
 router.patch('/:id/approve', authMiddleware, roleMiddleware('faculty'), approveSubmission);
 // Student can see their own submissions
 router.get('/mine', studentAuth, getMySubmissions);
+router.get('/exam-status/:courseId', studentAuth, getExamViolationStatus);
+router.post('/exam-violations/:courseId', studentAuth, recordExamViolation);
 router.patch('/:id/score', authMiddleware, roleMiddleware('faculty'), overrideScore);
 module.exports = router;

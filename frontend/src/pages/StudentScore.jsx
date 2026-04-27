@@ -10,6 +10,7 @@ import StudentNavbar from './StudentNavbar';
 
 const API_COURSES = 'http://localhost:5000/api/students/courses-with-exams';
 const API_SUBMISSIONS = 'http://localhost:5000/api/submissions/mine';
+const API_STUDENT_QUESTIONS = 'http://localhost:5000/api/submissions/student-questions';
 
 // Helper to pick an icon based on course name
 function getCourseIcon(name, idx) {
@@ -72,21 +73,59 @@ export default function StudentScore() {
           const status = (s.status ?? s.state ?? (s.raw && s.raw.status) ?? '').toString();
           const scoreRaw = s.score ?? s.marks ?? s.points ?? null;
           const score = (scoreRaw != null && scoreRaw !== '') ? Number(scoreRaw) : null;
+          const maxScoreRaw = s.maxScore ?? s.questionScore ?? s.question?.score ?? s.Question?.score ?? null;
+          const maxScore = (maxScoreRaw != null && maxScoreRaw !== '') ? Number(maxScoreRaw) : null;
           const createdAt = s.createdAt ?? s.created_at ?? s.created_at_date ?? null;
 
           return {
             id: s.id ?? s._id ?? `sub-${idx}`,
+            questionId: s.question_id ?? s.questionId ?? s.question?.id ?? s.Question?.id ?? null,
             courseId,
             courseName,
             status,
             score: Number.isNaN(score) ? null : score,
+            maxScore: Number.isNaN(maxScore) ? null : maxScore,
             createdAt,
             raw: s,
           };
         });
 
+        const courseTotals = new Map();
+        const seenQuestionKeys = new Set();
+        normalizedSubs.forEach((s) => {
+          const key = s.courseId ?? s.courseName ?? 'unknown';
+          if (!courseTotals.has(key)) courseTotals.set(key, 0);
+          const questionKey = `${key}::${s.questionId ?? 'unknown-question'}`;
+          if (s.questionId != null && s.maxScore != null && !seenQuestionKeys.has(questionKey)) {
+            seenQuestionKeys.add(questionKey);
+            courseTotals.set(key, courseTotals.get(key) + s.maxScore);
+          }
+        });
+
+        if (coursesData.length) {
+          const remainingQuestionResponses = await Promise.allSettled(
+            coursesData.map((course) => axios.get(`${API_STUDENT_QUESTIONS}/${course.id}`, { headers }))
+          );
+
+          remainingQuestionResponses.forEach((result, idx) => {
+            if (result.status !== 'fulfilled') return;
+            const course = coursesData[idx];
+            const payload = result.value?.data ?? {};
+            const questions = Array.isArray(payload.questions) ? payload.questions : [];
+            const remainingTotal = questions.reduce((sum, question) => {
+              const value = Number(question?.score);
+              return sum + (Number.isNaN(value) ? 0 : value);
+            }, 0);
+            const existing = courseTotals.get(course.id) ?? 0;
+            courseTotals.set(course.id, existing + remainingTotal);
+          });
+        }
+
         if (mounted) {
-          setCourses(coursesData);
+          setCourses(coursesData.map((course) => ({
+            ...course,
+            totalPossibleScore: courseTotals.get(course.id) ?? 0,
+          })));
           setSubmissions(normalizedSubs);
         }
       } catch (err) {
@@ -104,13 +143,27 @@ export default function StudentScore() {
   const aggregates = useMemo(() => {
     const map = new Map();
     courses.forEach(c => {
-      map.set(c.id, { id: c.id, name: c.name || c.code || c.id, score: 0, accepted: 0, total: 0 });
+      map.set(c.id, {
+        id: c.id,
+        name: c.name || c.code || c.id,
+        score: 0,
+        totalPossibleScore: Number(c.totalPossibleScore) || 0,
+        accepted: 0,
+        total: 0
+      });
     });
 
     submissions.forEach(s => {
       const key = s.courseId ?? s.courseName ?? 'unknown';
       if (!map.has(key)) {
-        map.set(key, { id: key, name: s.courseName ?? (typeof key === 'string' ? key : 'Unknown Course'), score: 0, accepted: 0, total: 0 });
+        map.set(key, {
+          id: key,
+          name: s.courseName ?? (typeof key === 'string' ? key : 'Unknown Course'),
+          score: 0,
+          totalPossibleScore: 0,
+          accepted: 0,
+          total: 0
+        });
       }
       const entry = map.get(key);
       entry.total += 1;
@@ -192,9 +245,9 @@ export default function StudentScore() {
                       </div>
 
                       <div className="mb-6">
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Total Score</p>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Scored Score</p>
                         <div className="text-4xl font-black bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">
-                          {course.score}
+                          {course.score} / {course.totalPossibleScore}
                         </div>
                       </div>
 

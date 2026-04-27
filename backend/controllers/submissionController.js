@@ -58,6 +58,7 @@ const {
   Student,
   Course,
   User,
+  AuditLog,
   Batch,
   Testcase,
   TestResult,
@@ -90,6 +91,102 @@ function normalizeOutput(s = '') {
     .join('\n')
     .trim();
 }
+
+const EXAM_VIOLATION_ACTION = 'EXAM_VIOLATION';
+
+async function getExamViolationLogs(studentId, courseId) {
+  if (!AuditLog) return [];
+  return AuditLog.findAll({
+    where: {
+      user_id: studentId,
+      action: EXAM_VIOLATION_ACTION,
+      resource_type: 'COURSE_EXAM',
+      resource_id: Number(courseId)
+    },
+    order: [['id', 'ASC']]
+  });
+}
+
+function normalizeViolationLogs(logs = []) {
+  return logs.map((log) => ({
+    id: log.id,
+    reason: log.details?.reason || 'Violation recorded',
+    time: log.createdAt
+  }));
+}
+
+exports.getExamViolationStatus = async (req, res) => {
+  try {
+    const studentId = req.user && req.user.id;
+    const { courseId } = req.params;
+
+    if (!studentId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    if (!courseId) return res.status(400).json({ success: false, message: 'courseId is required' });
+
+    const course = await Course.findByPk(courseId, { attributes: ['id', 'allowed_violations'] });
+    const violationLimit = Math.max(1, Number(course?.allowed_violations) || 3);
+    const logs = await getExamViolationLogs(studentId, courseId);
+    const count = logs.length;
+
+    return res.status(200).json({
+      success: true,
+      courseId: Number(courseId),
+      violationLimit,
+      violationCount: count,
+      remainingViolations: Math.max(0, violationLimit - count),
+      blocked: count >= violationLimit,
+      violations: normalizeViolationLogs(logs)
+    });
+  } catch (err) {
+    console.error('getExamViolationStatus error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to fetch exam violation status', error: err.message });
+  }
+};
+
+exports.recordExamViolation = async (req, res) => {
+  try {
+    const studentId = req.user && req.user.id;
+    const { courseId } = req.params;
+    const reason = String(req.body?.reason || 'Violation recorded').trim();
+
+    if (!studentId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    if (!courseId) return res.status(400).json({ success: false, message: 'courseId is required' });
+
+    const course = await Course.findByPk(courseId, { attributes: ['id', 'allowed_violations'] });
+    const violationLimit = Math.max(1, Number(course?.allowed_violations) || 3);
+
+    if (AuditLog) {
+      await AuditLog.create({
+        user_id: studentId,
+        action: EXAM_VIOLATION_ACTION,
+        resource_type: 'COURSE_EXAM',
+        resource_id: Number(courseId),
+        status: 'success',
+        details: {
+          reason,
+          studentId,
+          courseId: Number(courseId)
+        }
+      });
+    }
+
+    const logs = await getExamViolationLogs(studentId, courseId);
+    const count = logs.length;
+
+    return res.status(201).json({
+      success: true,
+      courseId: Number(courseId),
+      violationLimit,
+      violationCount: count,
+      remainingViolations: Math.max(0, violationLimit - count),
+      blocked: count >= violationLimit,
+      violations: normalizeViolationLogs(logs)
+    });
+  } catch (err) {
+    console.error('recordExamViolation error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to record exam violation', error: err.message });
+  }
+};
 
 exports.executeCode = async (req, res) => {
   try {
@@ -878,7 +975,7 @@ exports.getMySubmissions = async (req, res) => {
       include: [
         {
           model: Question,
-          attributes: ['id', 'title', 'course_id'],
+          attributes: ['id', 'title', 'course_id', 'score'],
           include: [{ model: Course, attributes: ['id', 'name', 'course_code'] }]
         },
         {
@@ -895,6 +992,7 @@ exports.getMySubmissions = async (req, res) => {
       id: s.id,
       question_id: s.question_id,
       question_title: s.Question?.title || null,
+      maxScore: s.Question?.score ?? null,
       course: s.Question?.Course ? { id: s.Question.Course.id, name: s.Question.Course.name, code: s.Question.Course.course_code || s.Question.Course.code } : null,
       status: s.status,
       score: s.score,

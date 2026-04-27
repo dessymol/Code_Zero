@@ -3,11 +3,12 @@ import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
 
-// Judge0 Configuration - FIXED
-// Use environment variable with fallback
-const JUDGE0_API_URL = import.meta.env.VITE_JUDGE0_URL || 'http://localhost:2358';
 const RAPIDAPI_KEY = import.meta.env.VITE_RAPIDAPI_KEY || null;
 const RAPIDAPI_HOST = import.meta.env.VITE_RAPIDAPI_HOST || 'judge0-ce.p.rapidapi.com';
+// Judge0 Configuration
+const JUDGE0_API_URL =
+  import.meta.env.VITE_JUDGE0_URL ||
+  (RAPIDAPI_KEY ? `https://${RAPIDAPI_HOST}` : 'http://localhost:2358');
 
 
 // Normalize backend origin so we don't accidentally produce /api/api/... URLs
@@ -17,10 +18,13 @@ const RAW_BACKEND_API_URL =
   import.meta.env.VITE_API_URL ||
   'http://localhost:5000';
 const BACKEND_API_URL = RAW_BACKEND_API_URL.replace(/\/api\/?$/, '');
+const EXAM_STATUS_API = `${BACKEND_API_URL}/api/submissions/exam-status`;
+const EXAM_VIOLATION_API = `${BACKEND_API_URL}/api/submissions/exam-violations`;
 
 
 const JUDGE0_SUBMISSIONS_URL = `${JUDGE0_API_URL}/submissions`;
 const JUDGE0_SUBMISSIONS_BATCH_URL = `${JUDGE0_API_URL}/submissions/batch`;
+const USING_RAPIDAPI = Boolean(RAPIDAPI_KEY) && JUDGE0_API_URL.includes('rapidapi.com');
 
 // Helper function to get Judge0 headers (supports both self-hosted and RapidAPI)
 const getJudge0Headers = () => {
@@ -28,7 +32,7 @@ const getJudge0Headers = () => {
     'Content-Type': 'application/json',
   };
   // Add RapidAPI headers if using RapidAPI
-  if (RAPIDAPI_KEY && JUDGE0_API_URL.includes('rapidapi.com')) {
+  if (USING_RAPIDAPI) {
     headers['X-RapidAPI-Key'] = RAPIDAPI_KEY;
     headers['X-RapidAPI-Host'] = RAPIDAPI_HOST;
   }
@@ -160,6 +164,8 @@ const CodingPage = () => {
   const [violationLimit, setViolationLimit] = useState(3);
   const [showFinalModal, setShowFinalModal] = useState(false);
   const [totalQuestions, setTotalQuestions] = useState(0);
+  const [examBlocked, setExamBlocked] = useState(false);
+  const [examBlockMessage, setExamBlockMessage] = useState('');
 
   // Violation popup state
   const [showViolationPopup, setShowViolationPopup] = useState(false);
@@ -200,8 +206,43 @@ const CodingPage = () => {
     setFullscreen(false);
   };
 
+  const syncViolationState = (violationEntries = [], limitOverride = violationLimit) => {
+    const limit = Math.max(1, Number(limitOverride || 3));
+    setViolations(violationEntries);
+    setRemainingViolations(Math.max(0, limit - violationEntries.length));
+    setShowWarning(violationEntries.length === Math.max(0, limit - 1));
+    if (violationEntries.length >= limit) {
+      setExamBlocked(true);
+      setExamBlockMessage('This exam is locked because the maximum number of violations has already been reached.');
+    }
+  };
+
+  const recordViolationOnServer = async (reason) => {
+    const token = localStorage.getItem('token');
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await axios.post(
+      `${EXAM_VIOLATION_API}/${courseId}`,
+      { reason },
+      { headers }
+    );
+    const payload = response?.data ?? {};
+    if (typeof payload.violationLimit !== 'undefined') {
+      setViolationLimit(Math.max(1, Number(payload.violationLimit) || 3));
+    }
+    if (Array.isArray(payload.violations)) {
+      syncViolationState(
+        payload.violations.map((entry) => ({
+          reason: entry.reason,
+          time: entry.time ? new Date(entry.time).toLocaleTimeString() : new Date().toLocaleTimeString(),
+        })),
+        payload.violationLimit
+      );
+    }
+    return payload;
+  };
+
   // Violation logging
-  const handleViolation = (reason) => {
+  const handleViolation = (reason, options = {}) => {
     const timestamp = new Date().toLocaleTimeString();
     setViolations(prev => {
       const newV = [...prev, { reason, time: timestamp }];
@@ -223,6 +264,21 @@ const CodingPage = () => {
       if (newV.length >= Math.max(1, limit)) setShowFinalModal(true);
       return newV;
     });
+
+    recordViolationOnServer(reason)
+      .then((payload) => {
+        if (payload?.blocked) {
+          setShowFinalModal(true);
+          setExamBlocked(true);
+          setExamBlockMessage('This exam is locked because the maximum number of violations has been reached.');
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to persist exam violation:', error);
+      })
+      .finally(() => {
+        if (options.exitAfter) forceExitExam();
+      });
   };
 
   // Cleanup
@@ -259,8 +315,7 @@ const CodingPage = () => {
     };
 
     const handleBlur = () => {
-      handleViolation('Window lost focus / minimized');
-      forceExitExam();
+      handleViolation('Window lost focus / minimized', { exitAfter: true });
     };
 
     const handleFullscreen = () => {
@@ -620,7 +675,7 @@ const CodingPage = () => {
       console.error('Compile error:', err);
       setResults(prev => ({
         ...prev,
-        [qid]: `Compile/Run Error: ${err.message}\n\nPlease ensure:\n1. Docker is running\n2. Judge0 is started: docker run -d -p 2358:2358 judge0/judge0:1.13.0\n3. Port 2358 is available`
+        [qid]: `Compile/Run Error: ${err.message}\n\nPlease ensure:\n1. Your RapidAPI Judge0 key is valid\n2. The Judge0 URL points to your RapidAPI host\n3. Your API quota or rate limit has not been exceeded`
       }));
     }
     setCompiling(c => ({ ...c, [qid]: false }));
@@ -839,6 +894,8 @@ const CodingPage = () => {
     const fetchData = async () => {
       setLoading(true);
       setPageError('');
+      setExamBlocked(false);
+      setExamBlockMessage('');
       try {
         const token = localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -895,10 +952,35 @@ const CodingPage = () => {
             { headers }
           );
           const courseData = courseResp?.data?.course ? courseResp.data.course : courseResp.data;
+          const limitFromCourse = typeof courseData?.allowed_violations !== 'undefined'
+            ? Number(courseData.allowed_violations) || 3
+            : 3;
           if (courseData && typeof courseData.allowed_violations !== 'undefined') {
-            setViolationLimit(Number(courseData.allowed_violations) || 3);
+            setViolationLimit(limitFromCourse);
           } else {
             setViolationLimit(3);
+          }
+
+          try {
+            const statusResp = await axios.get(`${EXAM_STATUS_API}/${courseId}`, { headers });
+            const statusData = statusResp?.data ?? {};
+            const limitFromStatus = Math.max(1, Number(statusData.violationLimit ?? limitFromCourse) || 3);
+            setViolationLimit(limitFromStatus);
+
+            const existingViolations = Array.isArray(statusData.violations)
+              ? statusData.violations.map((entry) => ({
+                  reason: entry.reason,
+                  time: entry.time ? new Date(entry.time).toLocaleTimeString() : '-',
+                }))
+              : [];
+            syncViolationState(existingViolations, limitFromStatus);
+
+            if (statusData.blocked) {
+              setExamBlocked(true);
+              setExamBlockMessage('This exam was already ended because the allowed violation limit was exceeded.');
+            }
+          } catch (statusErr) {
+            console.error('Could not load exam violation status:', statusErr);
           }
         } catch (err) {
           setViolationLimit(3);
@@ -963,6 +1045,32 @@ const CodingPage = () => {
             Read the following carefully. You must acknowledge all items to start the exam.
           </p>
 
+          {examBlocked && (
+            <div style={{
+              marginBottom: 16,
+              padding: '12px 14px',
+              borderRadius: 8,
+              backgroundColor: '#fdecea',
+              color: '#b71c1c',
+              border: '1px solid #f5c2c7'
+            }}>
+              {examBlockMessage || 'This exam is locked due to previous violations.'}
+            </div>
+          )}
+
+          {!examBlocked && violations.length > 0 && (
+            <div style={{
+              marginBottom: 16,
+              padding: '12px 14px',
+              borderRadius: 8,
+              backgroundColor: '#fff8e1',
+              color: '#8a6d1d',
+              border: '1px solid #ffe082'
+            }}>
+              Existing violations for this course: <strong>{violations.length}</strong>. Remaining allowed violations: <strong>{Math.max(0, (violationLimit ?? 3) - violations.length)}</strong>
+            </div>
+          )}
+
           <ul style={{ listStyle: 'none', padding: 0, marginBottom: 18 }}>
             {ACKS.map((text, i) => (
               <li key={i} style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -993,14 +1101,14 @@ const CodingPage = () => {
                   setStarted(true);
                 }
               }}
-              disabled={!ackState.every(Boolean)}
+              disabled={!ackState.every(Boolean) || examBlocked}
               style={{
-                backgroundColor: ackState.every(Boolean) ? '#32bb5fff' : '#36be24da',
+                backgroundColor: ackState.every(Boolean) && !examBlocked ? '#32bb5fff' : '#36be24da',
                 color: '#0b0c0bff',
                 border: 'none',
                 padding: '10px 18px',
                 borderRadius: 8,
-                cursor: ackState.every(Boolean) ? 'pointer' : 'not-allowed',
+                cursor: ackState.every(Boolean) && !examBlocked ? 'pointer' : 'not-allowed',
                 fontWeight: 700
               }}
             >

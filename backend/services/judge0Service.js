@@ -2,15 +2,18 @@ const axios = require('axios');
 
 class Judge0Service {
   constructor() {
-    this.baseURL = process.env.JUDGE0_URL || 'http://localhost:2358';
     this.rapidApiKey = process.env.RAPIDAPI_KEY || null;
     this.rapidApiHost = process.env.RAPIDAPI_HOST || 'judge0-ce.p.rapidapi.com';
+    this.baseURL =
+      process.env.JUDGE0_URL ||
+      (this.rapidApiKey ? `https://${this.rapidApiHost}` : 'http://localhost:2358');
     // Configure headers based on whether we're using RapidAPI or self-hosted
     const headers = {
       'Content-Type': 'application/json'
     };
+    this.usingRapidApi = Boolean(this.rapidApiKey) && this.baseURL.includes('rapidapi.com');
     // Add RapidAPI headers if using RapidAPI
-    if (this.rapidApiKey && this.baseURL.includes('rapidapi.com')) {
+    if (this.usingRapidApi) {
       headers['X-RapidAPI-Key'] = this.rapidApiKey;
       headers['X-RapidAPI-Host'] = this.rapidApiHost;
     }
@@ -19,6 +22,7 @@ class Judge0Service {
       timeout: 60000, // 60 seconds timeout for code execution
       headers: headers
     });
+    console.log(`[Judge0Service] Using ${this.usingRapidApi ? 'RapidAPI' : 'local/self-hosted'} Judge0 at ${this.baseURL}`);
     // Map of common language names to Judge0 language IDs
     this.languageMap = {
       'python': 71,      // Python 3.8.1
