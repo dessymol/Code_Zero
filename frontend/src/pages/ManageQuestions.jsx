@@ -99,6 +99,7 @@ export default function ManageQuestions() {
   const [form, setForm] = useState({
     title: '', description: '', sample_input: '', sample_output: '', language_id: LANGUAGES[0].id, score: 100,
   });
+  const [testcases, setTestcases] = useState([]);
   const [saving, setSaving] = useState(false);
   const [testcaseDialogOpen, setTestcaseDialogOpen] = useState(false);
   const [testcaseQuestion, setTestcaseQuestion] = useState(null);
