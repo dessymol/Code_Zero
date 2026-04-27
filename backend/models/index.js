@@ -14,6 +14,7 @@ db.Course = require('./courses')(sequelize, DataTypes);
 db.Question = require('./questions')(sequelize, DataTypes);
 db.CourseMessage = require('./courseMessages')(sequelize, DataTypes);
 db.Submission = require('./submissions')(sequelize, DataTypes);
+db.ExamAttempt = require('./examattempts')(sequelize, DataTypes);
 db.Result = require('./results')(sequelize, DataTypes);
 db.SystemConfig = require('./systemconfig')(sequelize, DataTypes);
 db.AuditLog = require('./auditlogs')(sequelize, DataTypes);
@@ -107,6 +108,14 @@ db.Submission.belongsTo(db.Student, { foreignKey: 'student_id' });
 
 db.Question.hasMany(db.Submission, { foreignKey: 'question_id' });
 db.Submission.belongsTo(db.Question, { foreignKey: 'question_id' });
+if (db.ExamAttempt) {
+  db.Student.hasMany(db.ExamAttempt, { foreignKey: 'student_id' });
+  db.Course.hasMany(db.ExamAttempt, { foreignKey: 'course_id' });
+  db.ExamAttempt.belongsTo(db.Student, { foreignKey: 'student_id' });
+  db.ExamAttempt.belongsTo(db.Course, { foreignKey: 'course_id' });
+  db.ExamAttempt.hasMany(db.Submission, { foreignKey: 'attempt_id', as: 'submissions' });
+  db.Submission.belongsTo(db.ExamAttempt, { foreignKey: 'attempt_id', as: 'attempt' });
+}
 db.Submission.hasOne(db.SubmissionFeedback, { foreignKey: 'submission_id', as: 'Feedback' });
 db.SubmissionFeedback.belongsTo(db.Submission, { foreignKey: 'submission_id' });
 
@@ -121,7 +130,7 @@ if (db.Submission && db.TestResult) {
 }
 
 if (db.Testcase && db.TestResult) {
-  db.Testcase.hasMany(db.TestResult, { foreignKey: 'test_case_id', as: 'results' });
+  db.Testcase.hasMany(db.TestResult, { foreignKey: 'testcase_id', as: 'results' });
 }
 
 /** Results (if you use a rollup per course/student) */

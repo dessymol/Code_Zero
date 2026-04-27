@@ -11,6 +11,8 @@ const {
   getSubmissionsByCourseAndBatch,
   getMySubmissions,
   getCourseSubmissionsForFaculty,
+  startExamAttempt,
+  finalizeExamAttempt,
   // NEW: Add these imports
   executeCode,
   getSupportedLanguages,
@@ -25,6 +27,8 @@ const { studentAuth, facultyAuth, adminAuth, authMiddleware, roleMiddleware } = 
 router.get('/languages', getSupportedLanguages); // Get all supported programming languages
 router.get('/status/:token', getSubmissionStatus); // Check submission status by token
 router.post('/execute', studentAuth, executeCode);
+router.post('/attempts/start', studentAuth, startExamAttempt);
+router.post('/attempts/:attemptId/finalize', studentAuth, finalizeExamAttempt);
 
 // ========================
 // AUTHENTICATED ENDPOINTS

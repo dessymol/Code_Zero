@@ -15,8 +15,20 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.BOOLEAN,
       defaultValue: false
     },
+    is_final: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    },
+    finalized_at: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
     override_note: {
       type: DataTypes.STRING,
+      allowNull: true
+    },
+    attempt_id: {
+      type: DataTypes.INTEGER,
       allowNull: true
     },
     question_id: {

@@ -53,6 +53,7 @@ const { generateFeedback } = require('../services/llmServices');
 // destructure models + sequelize instance from db
 const {
   Submission,
+  ExamAttempt,
   Question,
   QuestionBatch,
   Student,
@@ -89,6 +90,164 @@ function normalizeOutput(s = '') {
     .map(line => line.trim())
     .join('\n')
     .trim();
+}
+
+async function getVisibleQuestionsForStudentCourse(studentId, courseId) {
+  const student = await Student.findByPk(studentId, {
+    include: [{ model: Batch, attributes: ['id', 'course_id'] }]
+  });
+  if (!student) return [];
+
+  const batchIdsForCourse = (student.Batches || [])
+    .filter((batch) => Number(batch.course_id) === Number(courseId))
+    .map((batch) => batch.id);
+
+  const questions = await Question.findAll({
+    where: { course_id: courseId },
+    include: [{
+      model: QuestionBatch,
+      as: 'QuestionBatches',
+      required: false,
+      attributes: ['id', 'batch_id', 'enabled']
+    }],
+    order: [['id', 'ASC']]
+  });
+
+  return (questions || []).filter((question) => {
+    const batchRows = question.QuestionBatches || [];
+    if (batchRows.length === 0) return true;
+    return batchRows.some((row) => row.enabled === true && batchIdsForCourse.includes(row.batch_id));
+  });
+}
+
+async function buildFeedbackForSubmission({ submission, question, judgeResult, score }) {
+  if (!(process.env.GEMINI_API_KEY || process.env.LLM_PROVIDER === 'local')) return;
+
+  const languageName = LANGUAGE_ID_MAP[Number(submission.language_id)] || `Language ${submission.language_id}`;
+  const feedbackPayload = {
+    code: submission.code,
+    input: question.sample_input || '',
+    languageName,
+    question: {
+      title: question.title,
+      description: question.description,
+      sample_output: question.sample_output
+    },
+    judgeResult,
+    score,
+    maxScore: question.score
+  };
+
+  setImmediate(async () => {
+    try {
+      const feedback = await generateFeedback(feedbackPayload);
+      await db.SubmissionFeedback.upsert({
+        submission_id: submission.id,
+        summary: feedback.summary || null,
+        what_went_wrong: feedback.what_went_wrong || null,
+        hint: feedback.hint || null,
+        positive: feedback.positive || null,
+        status: 'done'
+      });
+    } catch (err) {
+      console.error(`[Feedback] Failed for submission ${submission.id}:`, err.message);
+      try {
+        await db.SubmissionFeedback.upsert({
+          submission_id: submission.id,
+          status: 'failed'
+        });
+      } catch (createErr) {
+        console.error(`[Feedback] Failed to create failed record for submission ${submission.id}:`, createErr.message);
+      }
+    }
+  });
+}
+
+async function evaluateSubmissionAgainstFacultyTestcases(submission, question, transaction) {
+  const testcases = await Testcase.findAll({
+    where: { question_id: question.id },
+    order: [['createdAt', 'ASC']],
+    transaction
+  });
+
+  const maxScore = Number(question.score) || 0;
+  const results = [];
+  let passedCount = 0;
+  let lastJudgeResult = null;
+
+  if (testcases.length === 0) {
+    return {
+      status: 'No Testcases',
+      score: 0,
+      passedCount: 0,
+      totalTestcases: 0,
+      testResults: [],
+      lastJudgeResult: null
+    };
+  }
+
+  for (const testcase of testcases) {
+    let judgeResult;
+    try {
+      judgeResult = await judge0Service.submitCode(
+        submission.code,
+        Number(submission.language_id),
+        testcase.input || '',
+        testcase.output || '',
+        true
+      );
+    } catch (err) {
+      judgeResult = {
+        status: { id: 13, description: 'Judge0 error' },
+        stdout: '',
+        stderr: err.message,
+        time: null,
+        memory: null
+      };
+    }
+
+    lastJudgeResult = judgeResult;
+    const actualOutput = normalizeOutput((judgeResult.stdout || '').toString());
+    const expectedOutput = normalizeOutput((testcase.output || '').toString());
+    const statusId = judgeResult.status ? judgeResult.status.id : (judgeResult.status_id || 0);
+    const passed = statusId === 3 && actualOutput === expectedOutput;
+
+    if (passed) passedCount += 1;
+
+    results.push({
+      submission_id: submission.id,
+      testcase_id: testcase.id,
+      status: passed ? 'passed' : (statusId === 3 ? 'failed' : 'error'),
+      status_id: statusId,
+      execution_time: judgeResult.time ? Number(judgeResult.time) : null,
+      memory_usage: judgeResult.memory ? Number(judgeResult.memory) : null,
+      output: actualOutput,
+      expected_output: expectedOutput,
+      error_message: judgeResult.stderr || judgeResult.compile_output || judgeResult.message || null
+    });
+  }
+
+  await TestResult.destroy({
+    where: { submission_id: submission.id },
+    transaction
+  });
+  await TestResult.bulkCreate(results, { transaction });
+
+  const score = Math.floor((passedCount / testcases.length) * maxScore);
+  const status = passedCount === testcases.length
+    ? 'Accepted'
+    : passedCount > 0
+      ? 'Partial'
+      : (results.some((row) => row.status === 'error') ? 'Error' : 'Wrong Answer');
+
+  return {
+    status,
+    score,
+    passedCount,
+    totalTestcases: testcases.length,
+    testResults: results,
+    lastJudgeResult
+  };
 }
 
 exports.executeCode = async (req, res) => {
@@ -424,6 +583,301 @@ exports.submitCode = async (req, res) => {
   }
 };
 
+exports.startExamAttempt = async (req, res) => {
+  const t = await sequelize.transaction();
+  try {
+    const studentId = req.user?.id;
+    const courseId = Number(req.body.course_id);
+    if (!studentId) {
+      await t.rollback();
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+    if (!courseId) {
+      await t.rollback();
+      return res.status(400).json({ message: 'course_id is required' });
+    }
+
+    let attempt = await ExamAttempt.findOne({
+      where: {
+        student_id: studentId,
+        course_id: courseId,
+        status: 'active'
+      },
+      order: [['createdAt', 'DESC']],
+      transaction: t,
+      lock: t.LOCK.UPDATE
+    });
+
+    if (!attempt) {
+      attempt = await ExamAttempt.create({
+        student_id: studentId,
+        course_id: courseId,
+        status: 'active',
+        started_at: new Date()
+      }, { transaction: t });
+    }
+
+    const savedSubmissions = await Submission.findAll({
+      where: {
+        attempt_id: attempt.id,
+        student_id: studentId,
+        is_final: false
+      },
+      attributes: ['id', 'question_id', 'code', 'language_id', 'updatedAt'],
+      transaction: t
+    });
+
+    await t.commit();
+    return res.status(200).json({
+      success: true,
+      attempt,
+      savedAnswers: savedSubmissions
+    });
+  } catch (err) {
+    try { await t.rollback(); } catch (e) { console.warn('rollback failed', e); }
+    console.error('startExamAttempt error', err);
+    return res.status(500).json({ message: 'Could not start exam attempt', error: err.message || String(err) });
+  }
+};
+
+exports.submitCode = async (req, res) => {
+  const t = await sequelize.transaction();
+  try {
+    const {
+      code,
+      language_id,
+      question_id,
+      course_id,
+      student_id,
+      attempt_id
+    } = req.body;
+
+    const authStudentId = req.user?.id;
+    if (!authStudentId || Number(student_id) !== Number(authStudentId)) {
+      await t.rollback();
+      return res.status(401).json({ message: 'Unauthorized student' });
+    }
+    if (!question_id || !course_id || !attempt_id) {
+      await t.rollback();
+      return res.status(400).json({ message: 'question_id, course_id and attempt_id are required' });
+    }
+    if (!code || !String(code).trim()) {
+      await t.rollback();
+      return res.status(400).json({ message: 'Code is required' });
+    }
+
+    const attempt = await ExamAttempt.findOne({
+      where: {
+        id: attempt_id,
+        student_id: authStudentId,
+        course_id,
+        status: 'active'
+      },
+      transaction: t,
+      lock: t.LOCK.UPDATE
+    });
+    if (!attempt) {
+      await t.rollback();
+      return res.status(404).json({ message: 'Active exam attempt not found' });
+    }
+
+    const question = await Question.findOne({
+      where: {
+        id: question_id,
+        course_id
+      },
+      transaction: t
+    });
+    if (!question) {
+      await t.rollback();
+      return res.status(404).json({ message: 'Question not found' });
+    }
+
+    const permittedLang = question.language_id !== undefined && question.language_id !== null
+      ? Number(question.language_id)
+      : null;
+    if (permittedLang !== null && Number(language_id) !== permittedLang) {
+      await t.rollback();
+      return res.status(400).json({ message: 'Submitted language does not match permitted language for this question' });
+    }
+
+    let submission = await Submission.findOne({
+      where: {
+        attempt_id: attempt.id,
+        question_id,
+        student_id: authStudentId,
+        is_final: false
+      },
+      transaction: t,
+      lock: t.LOCK.UPDATE
+    });
+
+    const payload = {
+      code,
+      language_id: Number(language_id),
+      question_id,
+      student_id: authStudentId,
+      attempt_id: attempt.id,
+      output: null,
+      status: 'Saved',
+      execution_time: null,
+      score: null,
+      token: submission?.token || uuidv4(),
+      is_final: false,
+      finalized_at: null
+    };
+
+    let action = 'created';
+    if (submission) {
+      await submission.update(payload, { transaction: t });
+      action = 'updated';
+    } else {
+      submission = await Submission.create(payload, { transaction: t });
+    }
+
+    await t.commit();
+    return res.status(action === 'created' ? 201 : 200).json({
+      success: true,
+      action,
+      message: 'Answer saved. Final scoring happens when the exam is finished.',
+      submission
+    });
+  } catch (err) {
+    try { await t.rollback(); } catch (e) { console.warn('rollback failed', e); }
+    console.error('save answer error', err);
+    return res.status(500).json({ message: 'Could not save answer', error: err.message || String(err) });
+  }
+};
+
+exports.finalizeExamAttempt = async (req, res) => {
+  const t = await sequelize.transaction();
+  try {
+    const studentId = req.user?.id;
+    const attemptId = Number(req.params.attemptId);
+    const violationCount = Number(req.body?.violation_count || 0);
+
+    if (!studentId) {
+      await t.rollback();
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+    if (!attemptId) {
+      await t.rollback();
+      return res.status(400).json({ message: 'attemptId is required' });
+    }
+
+    const attempt = await ExamAttempt.findOne({
+      where: {
+        id: attemptId,
+        student_id: studentId
+      },
+      transaction: t,
+      lock: t.LOCK.UPDATE
+    });
+    if (!attempt) {
+      await t.rollback();
+      return res.status(404).json({ message: 'Exam attempt not found' });
+    }
+    if (attempt.status === 'finalized') {
+      await t.rollback();
+      return res.status(200).json({
+        success: true,
+        attempt,
+        results: [],
+        summary: {
+          totalScore: attempt.total_score,
+          questionCount: 0,
+          finalizedAt: attempt.finalized_at
+        }
+      });
+    }
+
+    const visibleQuestions = await getVisibleQuestionsForStudentCourse(studentId, attempt.course_id);
+    const visibleQuestionIds = visibleQuestions.map((question) => question.id);
+
+    const submissions = await Submission.findAll({
+      where: {
+        attempt_id: attempt.id,
+        student_id: studentId,
+        question_id: { [Op.in]: visibleQuestionIds }
+      },
+      transaction: t,
+      lock: t.LOCK.UPDATE
+    });
+    const submissionByQuestionId = new Map(submissions.map((submission) => [Number(submission.question_id), submission]));
+
+    const results = [];
+    let totalScore = 0;
+
+    for (const question of visibleQuestions) {
+      const submission = submissionByQuestionId.get(Number(question.id));
+      if (!submission || !submission.code) {
+        results.push({
+          question_id: question.id,
+          title: question.title,
+          score: 0,
+          maxScore: Number(question.score) || 0,
+          status: 'Not Answered',
+          passedCount: 0,
+          totalTestcases: 0
+        });
+        continue;
+      }
+
+      const evaluation = await evaluateSubmissionAgainstFacultyTestcases(submission, question, t);
+      totalScore += evaluation.score;
+
+      await submission.update({
+        status: evaluation.status,
+        score: evaluation.score,
+        output: evaluation.lastJudgeResult ? JSON.stringify(evaluation.lastJudgeResult) : null,
+        execution_time: evaluation.lastJudgeResult?.time ? String(evaluation.lastJudgeResult.time) : null,
+        is_final: true,
+        finalized_at: new Date()
+      }, { transaction: t });
+
+      results.push({
+        question_id: question.id,
+        title: question.title,
+        submission_id: submission.id,
+        score: evaluation.score,
+        maxScore: Number(question.score) || 0,
+        status: evaluation.status,
+        passedCount: evaluation.passedCount,
+        totalTestcases: evaluation.totalTestcases
+      });
+
+      await buildFeedbackForSubmission({
+        submission,
+        question,
+        judgeResult: evaluation.lastJudgeResult,
+        score: evaluation.score
+      });
+    }
+
+    attempt.status = 'finalized';
+    attempt.finalized_at = new Date();
+    attempt.total_score = totalScore;
+    attempt.violation_count = Number.isFinite(violationCount) ? violationCount : 0;
+    await attempt.save({ transaction: t });
+
+    await t.commit();
+    return res.status(200).json({
+      success: true,
+      attempt,
+      results,
+      summary: {
+        totalScore,
+        questionCount: visibleQuestions.length,
+        finalizedAt: attempt.finalized_at
+      }
+    });
+  } catch (err) {
+    try { await t.rollback(); } catch (e) { console.warn('rollback failed', e); }
+    console.error('finalizeExamAttempt error', err);
+    return res.status(500).json({ message: 'Could not finalize exam attempt', error: err.message || String(err) });
+  }
+};
+
 /**
  * NEW: Get supported programming languages from Judge0
  */
@@ -498,7 +952,7 @@ exports.getCompletedCourses = async (req, res) => {
     if (!studentId) return res.status(401).json({ message: 'Unauthorized' });
 
     const submissions = await Submission.findAll({
-      where: { student_id: studentId },
+      where: { student_id: studentId, is_final: true },
       include: [{ model: Question, attributes: ['course_id'] }],
       attributes: ['id']
     });
@@ -521,6 +975,7 @@ exports.getAllSubmissionsByCourse = async (req, res) => {
     if (!courseId) return res.status(400).json({ message: 'courseId required' });
 
     const submissions = await Submission.findAll({
+      where: { is_final: true },
       include: [
         {
           model: Question,
@@ -677,6 +1132,7 @@ exports.getCourseSubmissionsForAdmin = async (req, res) => {
     ];
 
     let submissions = await require('../models').Submission.findAll({
+      where: { is_final: true },
       include,
       order: [['createdAt', 'DESC']]
     });
@@ -733,6 +1189,7 @@ exports.getSubmissionsByCourseAndBatch = async (req, res) => {
 
     // Inner join student->batch with a where clause ensures only students in batchId will be returned
     const submissions = await Submission.findAll({
+      where: { is_final: true },
       include: [
         {
           model: Question,
@@ -835,6 +1292,7 @@ exports.getCourseSubmissionsForFaculty = async (req, res) => {
     ];
 
     const submissions = await Submission.findAll({
+      where: { is_final: true },
       include,
       order: [['createdAt', 'DESC']]
     });
@@ -877,7 +1335,7 @@ exports.getMySubmissions = async (req, res) => {
     if (!studentId) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
     const subs = await Submission.findAll({
-      where: { student_id: studentId },
+      where: { student_id: studentId, is_final: true },
       include: [
         {
           model: Question,

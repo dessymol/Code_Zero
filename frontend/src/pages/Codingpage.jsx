@@ -122,6 +122,9 @@ const CodingPage = () => {
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState('');
   const [exitLoading, setExitLoading] = useState(false);
+  const [attemptId, setAttemptId] = useState(null);
+  const [startingExam, setStartingExam] = useState(false);
+  const [finalizingExam, setFinalizingExam] = useState(false);
 
   // Exam security states
   const [started, setStarted] = useState(false);
@@ -417,6 +420,41 @@ const CodingPage = () => {
     }
   };
 
+  const startOrResumeAttempt = async () => {
+    const token = localStorage.getItem('token');
+    const response = await axios.post(
+      `${SUBMISSIONS_API_URL}/attempts/start`,
+      { course_id: Number(courseId) },
+      { headers: { Authorization: token ? `Bearer ${token}` : '' } }
+    );
+
+    const nextAttemptId = response.data?.attempt?.id;
+    if (!nextAttemptId) {
+      throw new Error('Attempt could not be started');
+    }
+
+    setAttemptId(nextAttemptId);
+
+    const savedAnswers = Array.isArray(response.data?.savedAnswers) ? response.data.savedAnswers : [];
+    if (savedAnswers.length > 0) {
+      setCodes(prev => {
+        const next = { ...prev };
+        savedAnswers.forEach(answer => {
+          if (answer?.question_id != null) next[answer.question_id] = answer.code || '';
+        });
+        return next;
+      });
+      setSubmittedQuestions(savedAnswers.map(answer => answer.question_id).filter(Boolean));
+    }
+
+    return nextAttemptId;
+  };
+
+  const ensureAttemptId = async () => {
+    if (attemptId) return attemptId;
+    return startOrResumeAttempt();
+  };
+
   const handleCompile = async (qid) => {
     console.log('🔨 ========== Compile Request Started ==========');
     console.log('📝 Question ID:', qid);
@@ -527,14 +565,14 @@ const CodingPage = () => {
     setCompiling(c => ({ ...c, [qid]: false }));
   };
 
-  const handleSubmit = async (qid, sample_input, sample_output) => {
+  const handleSubmit = async (qid) => {
     setCompiling(c => ({ ...c, [qid]: true }));
-    setResults(r => ({ ...r, [qid]: 'Submitting...' }));
+    setResults(r => ({ ...r, [qid]: 'Saving answer...' }));
 
     try {
       const code = codes[qid];
       if (!code || !code.trim()) {
-        setResults(prev => ({ ...prev, [qid]: 'Error: Code is empty. Please write some code before submitting.' }));
+        setResults(prev => ({ ...prev, [qid]: 'Error: Code is empty. Please write some code before saving.' }));
         setCompiling(c => ({ ...c, [qid]: false }));
         return;
       }
@@ -543,19 +581,20 @@ const CodingPage = () => {
       const langForQuestion = getQuestionLanguageId(currentQuestion);
 
       if (!langForQuestion) {
-        setResults(prev => ({ ...prev, [qid]: `Cannot submit: no language assigned to this question.` }));
+        setResults(prev => ({ ...prev, [qid]: `Cannot save: no language assigned to this question.` }));
         setCompiling(c => ({ ...c, [qid]: false }));
         return;
       }
 
-      const stdin = useCustomInput ? customStdin : (sample_input || '');
+      const currentAttemptId = await ensureAttemptId();
+      const stdin = '';
       console.log('📤 ========== Submit Request Started ==========');
       console.log('📝 Question ID:', qid);
       console.log('📥 Using input:', stdin);
 
       const token = localStorage.getItem('token');
 
-      const submitResponse = await axios.post(
+      await axios.post(
         `${SUBMISSIONS_API_URL}/submit`,
         {
           code,
@@ -563,86 +602,23 @@ const CodingPage = () => {
           question_id: qid,
           course_id: courseId,
           student_id: studentId,
-          jwt_token: token,
-          stdin,
-          expected_output: currentQuestion.sample_output,
-          sample_input: stdin,
-          sample_output: currentQuestion.sample_output
+          attempt_id: currentAttemptId
         },
         { headers: { Authorization: token ? `Bearer ${token}` : '' } }
       );
 
-      const finalJudgeResult = submitResponse.data?.judgeResult || null;
-      const formatted = formatJudgeResult(finalJudgeResult || {}, currentQuestion.sample_output);
-      const statusMessage = finalJudgeResult?.status ? finalJudgeResult.status.description : 'Unknown Status';
-
-      const submissionId = submitResponse.data?.submission?.id;
-      if (submissionId) {
-        // Set feedback to loading state
-        setFeedback(prev => ({ ...prev, [qid]: { status: 'loading' } }));
-
-        // Poll once after 5 seconds (Gemini), 15 seconds for local LLM
-        const delay = 5000;
-        // try once at 6 s, retry at 14 s if still pending
-        const pollFeedback = async () => {
-          const token = localStorage.getItem('token');
-          for (const wait of [6000, 8000]) {
-            await new Promise(r => setTimeout(r, wait));
-            try {
-              const fb = await axios.get(
-                `${BACKEND_API_URL}/api/submissions/${submissionId}/feedback`,
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
-              if (fb.data?.status === 'done' || fb.data?.status === 'failed') {
-                setFeedback(prev => ({ ...prev, [qid]: fb.data }));
-                return;
-              }
-            } catch { /* ignore and retry */ }
-          }
-          // Give up after 2 attempts
-          setFeedback(prev => ({ ...prev, [qid]: { status: 'failed' } }));
-        };
-        pollFeedback();
-        // setTimeout(async () => {
-        //   try {
-        //     const fb = await axios.get(
-        //       `${BACKEND_API_URL}/api/submissions/${submissionId}/feedback`,
-        //       { headers: { Authorization: `Bearer ${token}` } }
-        //     );
-        //     setFeedback(prev => ({ ...prev, [qid]: fb.data }));
-        //   } catch {
-        //     setFeedback(prev => ({ ...prev, [qid]: { status: 'failed' } }));
-        //   }
-        // }, delay);
-
-      }
       // Mark as submitted
       setSubmittedQuestions(prev => [...new Set([...prev, qid])]);
 
-      // Remove submitted question
-      const newQuestions = questions.filter(q => q.id !== qid);
-      setQuestions(newQuestions);
-
-      setCodes(prev => {
-        const next = { ...prev };
-        delete next[qid];
-        return next;
-      });
-
-      setCurrentIdx((prevIdx) => {
-        if (newQuestions.length === 0) return 0;
-        return prevIdx > newQuestions.length - 1 ? Math.max(0, newQuestions.length - 1) : prevIdx;
-      });
-
       setResults(prev => ({
         ...prev,
-        [qid]: `✅ Submission Complete!\nJudge0 Status: ${statusMessage}\n\n${formatted.displayText}`
+        [qid]: 'Answer saved for this exam attempt.\n\nFinal scoring will run only after you finish the exam.'
       }));
     } catch (err) {
       console.error('Submission error:', err);
       setResults(prev => ({
         ...prev,
-        [qid]: `Submission Error: ${err.response?.data?.message || err.message}\n\nThe submission could not be completed.`
+        [qid]: `Save Error: ${err.response?.data?.message || err.message}\n\nThe answer could not be saved.`
       }));
     }
     setCompiling(c => ({ ...c, [qid]: false }));
@@ -652,21 +628,42 @@ const CodingPage = () => {
     const q = questions[currentIdx];
     if (!q) {
       if (currentIdx + 1 < questions.length) setCurrentIdx(currentIdx + 1);
-      else handleFinalSubmit();
+      else handleFinalSubmit({ skipCurrentSave: true });
       return;
     }
-    await handleSubmit(q.id, q.sample_input, q.sample_output);
+    await handleSubmit(q.id);
     if (currentIdx + 1 < questions.length) setCurrentIdx(currentIdx + 1);
-    else handleFinalSubmit();
+    else handleFinalSubmit({ skipCurrentSave: true });
   };
 
-  const handleFinalSubmit = async () => {
-    const currentQ = questions[currentIdx];
-    if (currentQ) {
-      await handleSubmit(currentQ.id, currentQ.sample_input, currentQ.sample_output);
+  const handleFinalSubmit = async ({ skipCurrentSave = false } = {}) => {
+    if (finalizingExam) return;
+    setFinalizingExam(true);
+
+    try {
+      const currentQ = questions[currentIdx];
+      if (currentQ && !skipCurrentSave) {
+        await handleSubmit(currentQ.id);
+      }
+
+      const currentAttemptId = await ensureAttemptId();
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        `${SUBMISSIONS_API_URL}/attempts/${currentAttemptId}/finalize`,
+        { violation_count: violations.length },
+        { headers: { Authorization: token ? `Bearer ${token}` : '' } }
+      );
+
+      const totalScore = response.data?.summary?.totalScore ?? 0;
+      exitFullScreen();
+      window.alert(`Exam finalized. Total score: ${totalScore}`);
+      navigate('/student/dashboard');
+    } catch (err) {
+      console.error('Finalize error:', err);
+      setPageError(`Could not finalize exam. (${err.response?.data?.message || err.message})`);
+    } finally {
+      setFinalizingExam(false);
     }
-    exitFullScreen();
-    navigate('/student/dashboard');
   };
 
   // Data fetching
@@ -822,24 +819,31 @@ const CodingPage = () => {
             </button>
 
             <button
-              onClick={() => {
-                if (ackState.every(Boolean)) {
+              onClick={async () => {
+                if (!ackState.every(Boolean)) return;
+                try {
+                  setStartingExam(true);
+                  await startOrResumeAttempt();
                   goFullScreen(document.documentElement);
                   setStarted(true);
+                } catch (err) {
+                  setPageError(`Could not start exam attempt. (${err.response?.data?.message || err.message})`);
+                } finally {
+                  setStartingExam(false);
                 }
               }}
-              disabled={!ackState.every(Boolean)}
+              disabled={!ackState.every(Boolean) || startingExam}
               style={{
                 backgroundColor: ackState.every(Boolean) ? '#32bb5fff' : '#36be24da',
                 color: '#0b0c0bff',
                 border: 'none',
                 padding: '10px 18px',
                 borderRadius: 8,
-                cursor: ackState.every(Boolean) ? 'pointer' : 'not-allowed',
+                cursor: ackState.every(Boolean) && !startingExam ? 'pointer' : 'not-allowed',
                 fontWeight: 700
               }}
             >
-              Start Exam
+              {startingExam ? 'Starting...' : 'Start Exam'}
             </button>
 
             <button
@@ -1149,13 +1153,13 @@ const CodingPage = () => {
               </button>
 
               <button
-                onClick={() => handleSubmit(currentQuestion.id, currentQuestion.sample_input, currentQuestion.sample_output)}
-                disabled={!!compiling[currentQuestion.id]}
+                onClick={() => handleSubmit(currentQuestion.id)}
+                disabled={!!compiling[currentQuestion.id] || finalizingExam}
                 style={{
                   padding: '10px 16px', borderRadius: 6, background: '#0b66c3', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer'
                 }}
               >
-                {compiling[currentQuestion.id] ? 'Submitting.' : 'Submit Code'}
+                {compiling[currentQuestion.id] ? 'Saving...' : 'Save Answer'}
               </button>
 
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
@@ -1191,10 +1195,11 @@ const CodingPage = () => {
               </button>
 
               <button
-                onClick={handleFinalSubmit}
+                onClick={() => handleFinalSubmit()}
+                disabled={finalizingExam}
                 style={{ padding: '8px 12px', borderRadius: 6, background: '#0b66c3', color: '#fff', cursor: 'pointer' }}
               >
-                Finish Exam
+                {finalizingExam ? 'Finalizing...' : 'Finish Exam'}
               </button>
             </div>
           </div >
