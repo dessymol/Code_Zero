@@ -118,13 +118,14 @@ exports.executeCode = async (req, res) => {
 
     // Use provided stdin or question's sample input
     const inputToUse = stdin || sampleInput;
+    const expectedOutputToUse = expectedOutput || sampleOutput;
 
     // Submit to Judge0
-    judgeResult = await judge0Service.submitCode(
+    const judgeResult = await judge0Service.submitCode(
       code,
-      language_id,
-      stdin || question.sample_input || '',   // prefer req.body.stdin
-      question.sample_output || '',
+      normalizedLanguageId,
+      inputToUse,
+      expectedOutputToUse,
       true
     );
 
@@ -190,6 +191,8 @@ exports.submitCode = async (req, res) => {
     }
 
     let judgeResult = judge_result;
+    const inputToUse = stdin || question.sample_input || '';
+    const expectedOutputToUse = expected_output || question.sample_output || '';
 
     // If judge_result is not provided, submit to Judge0 ourselves
     if (!judgeResult && code && language_id) {
@@ -197,8 +200,8 @@ exports.submitCode = async (req, res) => {
         judgeResult = await judge0Service.submitCode(
           code,
           language_id,
-          question.sample_input || '',
-          question.sample_output || '',
+          inputToUse,
+          expectedOutputToUse,
           true
         );
       } catch (judgeError) {

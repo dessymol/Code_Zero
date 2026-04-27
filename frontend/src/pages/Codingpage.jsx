@@ -3,13 +3,6 @@ import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
 
-// Judge0 Configuration - FIXED
-// Use environment variable with fallback
-const JUDGE0_API_URL = import.meta.env.VITE_JUDGE0_URL || 'http://localhost:2358';
-const RAPIDAPI_KEY = import.meta.env.VITE_RAPIDAPI_KEY || null;
-const RAPIDAPI_HOST = import.meta.env.VITE_RAPIDAPI_HOST || 'judge0-ce.p.rapidapi.com';
-
-
 // Normalize backend origin so we don't accidentally produce /api/api/... URLs
 const RAW_BACKEND_API_URL =
   import.meta.env.VITE_API_ORIGIN ||
@@ -17,23 +10,7 @@ const RAW_BACKEND_API_URL =
   import.meta.env.VITE_API_URL ||
   'http://localhost:3000';
 const BACKEND_API_URL = RAW_BACKEND_API_URL.replace(/\/api\/?$/, '');
-
-
-const JUDGE0_SUBMISSIONS_URL = `${JUDGE0_API_URL}/submissions`;
-const JUDGE0_SUBMISSIONS_BATCH_URL = `${JUDGE0_API_URL}/submissions/batch`;
-
-// Helper function to get Judge0 headers (supports both self-hosted and RapidAPI)
-const getJudge0Headers = () => {
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-  // Add RapidAPI headers if using RapidAPI
-  if (RAPIDAPI_KEY && JUDGE0_API_URL.includes('rapidapi.com')) {
-    headers['X-RapidAPI-Key'] = RAPIDAPI_KEY;
-    headers['X-RapidAPI-Host'] = RAPIDAPI_HOST;
-  }
-  return headers;
-};
+const SUBMISSIONS_API_URL = `${BACKEND_API_URL}/api/submissions`;
 
 const ACKS = [
   'I will not switch tabs or applications during the exam.',
@@ -235,16 +212,12 @@ const CodingPage = () => {
     };
   }, []);
 
-  // Log Judge0 configuration on component mount
+  // Log execution configuration on component mount
   useEffect(() => {
-    console.log('🔧 ========== Judge0 Configuration ==========');
-    console.log('📍 Judge0 API URL:', JUDGE0_API_URL);
-    console.log('🔗 Submissions URL:', JUDGE0_SUBMISSIONS_URL);
-    console.log('🔑 RapidAPI Key:', RAPIDAPI_KEY ? `${RAPIDAPI_KEY.substring(0, 10)}...` : 'Not set');
-    console.log('🌐 RapidAPI Host:', RAPIDAPI_HOST);
-    console.log('✅ Using RapidAPI:', JUDGE0_API_URL.includes('rapidapi.com'));
-    console.log('📋 Headers:', getJudge0Headers());
-    console.log('===========================================');
+    console.log('🔧 ========== Code Execution Configuration ==========');
+    console.log('📍 Backend API URL:', BACKEND_API_URL);
+    console.log('🔗 Submission API URL:', SUBMISSIONS_API_URL);
+    console.log('===================================================');
   }, []);
 
   const forceExitExam = () => navigate('/student/dashboard');
@@ -374,182 +347,57 @@ const CodingPage = () => {
   };
 
   // ----------------- Judge0 Integration -----------------
-  const sendToJudge0 = async ({ source, stdin = '', language_id }) => {
-    console.log('🚀 ========== Judge0 Execution Started ==========');
-    console.log('📍 Judge0 API URL:', JUDGE0_API_URL);
-    console.log('🔑 Using RapidAPI:', JUDGE0_API_URL.includes('rapidapi.com'));
+  const sendToJudge0 = async ({ source, stdin = '', language_id, questionId, expectedOutput = '' }) => {
+    const token = localStorage.getItem('token');
+    console.log('🚀 ========== Code Execution Started ==========');
+    console.log('📍 Backend execution URL:', `${SUBMISSIONS_API_URL}/execute`);
     console.log('📋 Request Details:', {
       language_id,
+      questionId,
       source_length: source.length,
-      stdin_length: stdin.length,
-      headers: getJudge0Headers()
+      stdin_length: stdin.length
     });
 
     try {
-      console.log('📤 Step 1: Submitting code to Judge0...');
-      console.log('Submitting to Judge0:', { language_id, source_length: source.length, stdin_length: stdin.length });
-
-      const submissionData = {
-        source_code: source,
-        language_id: language_id,
-        stdin: stdin,
-        expected_output: null,
-        cpu_time_limit: 5,
-        memory_limit: 128000,
-        stack_limit: 64000,
-      };
-
-      // Create submission
-      console.log('📡 Step 2: Sending POST request to:', JUDGE0_SUBMISSIONS_URL);
-      console.log('📦 Submission payload:', {
-        language_id: submissionData.language_id,
-        source_code_length: submissionData.source_code.length,
-        stdin: submissionData.stdin,
-        cpu_time_limit: submissionData.cpu_time_limit,
-        memory_limit: submissionData.memory_limit
-      });
-      const createResponse = await axios.post(JUDGE0_SUBMISSIONS_URL, submissionData, {
-        headers: getJudge0Headers(),
-        timeout: 10000,
-      });
-
-      const token = createResponse.data.token;
-      console.log('✅ Step 3: Submission created successfully!');
-      console.log('🎫 Token received:', token);
-      console.log('📊 Full response:', createResponse.data);
-
-      // Poll for result
-      console.log('⏳ Step 4: Starting to poll for execution result...');
-      let result = null;
-      let attempts = 0;
-      const maxAttempts = 30;
-
-      while (attempts < maxAttempts) {
-        if (attempts > 0) {
-          const delay = Math.min(1000 * (1 + attempts * 0.3), 2000);
-          console.log(`⏸️  Waiting ${delay}ms before next poll attempt...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
+      const response = await axios.post(
+        `${SUBMISSIONS_API_URL}/execute`,
+        {
+          code: source,
+          language: Number(language_id),
+          stdin,
+          expectedOutput,
+          questionId
+        },
+        {
+          headers: { Authorization: token ? `Bearer ${token}` : '' },
+          timeout: 45000
         }
+      );
 
-        try {
-          const pollUrl = `${JUDGE0_SUBMISSIONS_URL}/${token}`;
-          console.log(`🔍 Step 4.${attempts + 1}: Polling attempt ${attempts + 1}/${maxAttempts} - GET ${pollUrl}`);
-          const resultResponse = await axios.get(pollUrl, {
-            headers: getJudge0Headers(),
-            timeout: 5000,
-          });
-
-          result = resultResponse.data;
-          const statusId = result.status?.id || result.status_id;
-          const statusDesc = result.status?.description || 'Unknown';
-          console.log(`📊 Poll attempt ${attempts + 1} response:`, {
-            statusId,
-            statusDescription: statusDesc,
-            hasStdout: !!result.stdout,
-            hasStderr: !!result.stderr,
-            hasCompileOutput: !!result.compile_output,
-            time: result.time,
-            memory: result.memory
-          });
-          console.log(`Poll attempt ${attempts + 1}: Status ID = ${statusId}, Description = ${statusDesc}`);
-
-          // Status IDs: 1 = In Queue, 2 = Processing, others = Complete/Error
-          if (result.status && result.status.id !== 1 && result.status.id !== 2) {
-            console.log('✅ Step 5: Processing complete!');
-            console.log('📋 Final result:', {
-              status: result.status,
-              stdout: result.stdout,
-              stderr: result.stderr,
-              compile_output: result.compile_output,
-              time: result.time,
-              memory: result.memory
-            });
-            console.log('Processing complete:', result);
-            break;
-          } else {
-            console.log(`⏳ Still processing... (Status: ${statusDesc})`);
-          }
-        } catch (error) {
-          console.warn(`⚠️  Error fetching result (attempt ${attempts + 1}), retrying...`, error.message);
-          console.warn(`Error fetching result (attempt ${attempts + 1}), retrying...`, error.message);
-          if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
-            console.log('🔄 Connection issue detected, will retry...');
-            // retry
-          } else {
-            console.error('❌ Unexpected error during polling:', error);
-          }
-        }
-
-        attempts++;
-      }
-
-      if (!result) {
-        console.error('❌ Step 6: Timeout - No result received after', maxAttempts, 'attempts');
-        throw new Error('Timeout waiting for Judge0 result after 30 seconds');
-      }
-
-      if (result.status && result.status.id === 13) {
-        console.error('⚠️  Step 6: Judge0 returned Internal Error:', {
-          status: result.status,
-          stderr: result.stderr,
-          compile_output: result.compile_output,
-          message: result.message
-        });
-        console.error('Judge0 returned Internal Error:', {
-          status: result.status,
-          stderr: result.stderr,
-          compile_output: result.compile_output,
-          message: result.message
-        });
-      }
-
-      console.log('✅ Step 6: Judge0 execution completed successfully');
+      const result = response.data?.data || response.data?.judgeResult || response.data;
+      console.log('✅ Backend execution completed');
       console.log('📊 Final Judge0 result:', result);
-      console.log('🏁 ========== Judge0 Execution Ended ==========');
       return result;
-
     } catch (error) {
-      console.error('❌ ========== Judge0 Execution Failed ==========');
-      console.error('🚨 Judge0 submission error:', error);
-      console.error('📋 Error details:', {
-        message: error.message,
-        code: error.code,
-        response: error.response?.data,
-        status: error.response?.status,
-        url: error.config?.url,
-        method: error.config?.method,
-        headers: error.config?.headers
-      });
-      console.error('Error details:', {
-        message: error.message,
-        code: error.code,
-        response: error.response?.data,
-        status: error.response?.status
-      });
-
-      if (error.code === 'ECONNREFUSED') {
-        throw new Error('Judge0 server is not running. Please ensure Docker is running and Judge0 containers are started.');
-      } else if (error.response) {
-        const errorData = error.response.data;
-        const errorMsg = typeof errorData === 'string' ? errorData : (errorData?.error || JSON.stringify(errorData));
-        throw new Error(`Judge0 API error (${error.response.status}): ${errorMsg}`);
-      } else if (error.request) {
-        throw new Error('Cannot connect to Judge0 server. Check if the service is running on port 2358.');
-      } else {
-        throw new Error(`Judge0 error: ${error.message}`);
-      }
+      console.error('❌ Backend execution failed:', error);
+      const errorMsg =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        'Execution failed';
+      throw new Error(errorMsg);
     }
   };
 
   // Test Judge0 connection
   const testJudge0Connection = async () => {
-    console.log('🔌 Testing Judge0 connection...');
-    console.log('📍 Testing URL:', `${JUDGE0_API_URL}/languages`);
-    console.log('🔑 Headers:', getJudge0Headers());
+    console.log('🔌 Testing Judge0 connection through backend...');
+    console.log('📍 Testing URL:', `${SUBMISSIONS_API_URL}/languages`);
 
     try {
-      const response = await axios.get(`${JUDGE0_API_URL}/languages`, {
-        headers: getJudge0Headers(),
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${SUBMISSIONS_API_URL}/languages`, {
+        headers: { Authorization: token ? `Bearer ${token}` : '' },
         timeout: 5000
       });
       console.log('✅ Judge0 connection test: SUCCESS');
@@ -581,7 +429,7 @@ const CodingPage = () => {
       if (!isConnected) {
         setResults(prev => ({
           ...prev,
-          [qid]: 'Error: Cannot connect to Judge0 server. Please ensure Docker is running and Judge0 is started on port 2358.'
+          [qid]: 'Error: Cannot connect to code execution service. Check whether the backend server and Judge0 integration are running.'
         }));
         setCompiling(c => ({ ...c, [qid]: false }));
         return;
@@ -607,7 +455,9 @@ const CodingPage = () => {
       const res = await sendToJudge0({
         source: code,
         stdin: useCustomInput ? customStdin : (currentQuestion?.sample_input || ''),
-        language_id: langForQuestion
+        language_id: langForQuestion,
+        questionId: qid,
+        expectedOutput: currentQuestion?.sample_output || ''
       });
 
       console.log('✅ Compilation result received');
@@ -620,7 +470,7 @@ const CodingPage = () => {
       console.error('Compile error:', err);
       setResults(prev => ({
         ...prev,
-        [qid]: `Compile/Run Error: ${err.message}\n\nPlease ensure:\n1. Docker is running\n2. Judge0 is started: docker run -d -p 2358:2358 judge0/judge0:1.13.0\n3. Port 2358 is available`
+        [qid]: `Compile/Run Error: ${err.message}\n\nCheck the backend Judge0 configuration and confirm the backend server is running.`
       }));
     }
     setCompiling(c => ({ ...c, [qid]: false }));
@@ -656,7 +506,9 @@ const CodingPage = () => {
       const res = await sendToJudge0({
         source: code,
         stdin,
-        language_id: langForQuestion
+        language_id: langForQuestion,
+        questionId: qid,
+        expectedOutput: currentQuestion?.sample_output || ''
       });
 
       console.log('✅ Execution result received');
@@ -669,7 +521,7 @@ const CodingPage = () => {
       console.error('Run error:', err);
       setResults(prev => ({
         ...prev,
-        [qid]: `Run Error: ${err.message}\n\nPlease check if Judge0 is running properly.`
+        [qid]: `Run Error: ${err.message}\n\nCheck whether the backend can reach Judge0.`
       }));
     }
     setCompiling(c => ({ ...c, [qid]: false }));
@@ -700,27 +552,11 @@ const CodingPage = () => {
       console.log('📤 ========== Submit Request Started ==========');
       console.log('📝 Question ID:', qid);
       console.log('📥 Using input:', stdin);
-      let judgeResp = null;
-      let usedBackendExecutionFallback = false;
-
-      try {
-        console.log('📤 Sending code to Judge0 for submission...');
-        judgeResp = await sendToJudge0({
-          source: code,
-          stdin,
-          language_id: langForQuestion
-        });
-        console.log('✅ Submission result received from Judge0');
-      } catch (judgeError) {
-        usedBackendExecutionFallback = true;
-        console.warn('⚠️ Frontend Judge0 submission failed, falling back to backend execution:', judgeError.message);
-      }
 
       const token = localStorage.getItem('token');
 
-      // ✅ Keep your original route exactly
       const submitResponse = await axios.post(
-        `${BACKEND_API_URL}/api/submissions/submit`,
+        `${SUBMISSIONS_API_URL}/submit`,
         {
           code,
           language_id: Number(langForQuestion),
@@ -731,13 +567,12 @@ const CodingPage = () => {
           stdin,
           expected_output: currentQuestion.sample_output,
           sample_input: stdin,
-          sample_output: currentQuestion.sample_output,
-          judge_result: judgeResp
+          sample_output: currentQuestion.sample_output
         },
         { headers: { Authorization: token ? `Bearer ${token}` : '' } }
       );
 
-      const finalJudgeResult = submitResponse.data?.judgeResult || judgeResp;
+      const finalJudgeResult = submitResponse.data?.judgeResult || null;
       const formatted = formatJudgeResult(finalJudgeResult || {}, currentQuestion.sample_output);
       const statusMessage = finalJudgeResult?.status ? finalJudgeResult.status.description : 'Unknown Status';
 
@@ -801,7 +636,7 @@ const CodingPage = () => {
 
       setResults(prev => ({
         ...prev,
-        [qid]: `✅ Submission Complete!\nJudge0 Status: ${statusMessage}${usedBackendExecutionFallback ? '\nExecution was completed by the backend fallback path.' : ''}\n\n${formatted.displayText}`
+        [qid]: `✅ Submission Complete!\nJudge0 Status: ${statusMessage}\n\n${formatted.displayText}`
       }));
     } catch (err) {
       console.error('Submission error:', err);
