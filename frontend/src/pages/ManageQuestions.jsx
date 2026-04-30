@@ -110,6 +110,7 @@ export default function ManageQuestions() {
   const [savedTestcases, setSavedTestcases] = useState([]);
   const [verifying, setVerifying] = useState(false);
   const [verifyResults, setVerifyResults] = useState(null);
+  const [verifiedDraftSignature, setVerifiedDraftSignature] = useState('');
 
   const chatIndex = batches.length + 1;
 
@@ -123,6 +124,17 @@ export default function ManageQuestions() {
     }
     return null;
   };
+
+  const getFinalDraftTestcases = () => generatedTestcases
+    .map(tc => ({
+      input: tc.input.trim(),
+      output: tc.output.trim(),
+      is_public: tc.is_public === true
+    }))
+    .filter(tc => tc.input || tc.output);
+
+  const getDraftSignature = (drafts = getFinalDraftTestcases(), solution = refSolution) =>
+    JSON.stringify({ reference_solution: solution.trim(), testcases: drafts });
 
   const fetchAll = async () => {
     setLoading(true);
@@ -182,8 +194,36 @@ export default function ManageQuestions() {
 
   const verifyReferenceSolution = async () => {
     if (!testcaseQuestion) return;
+    const draftTestcases = getFinalDraftTestcases();
+    const hasDrafts = draftTestcases.length > 0;
+    const testcasesToVerify = hasDrafts
+      ? draftTestcases
+      : savedTestcases.map(tc => ({
+        id: tc.id,
+        input: String(tc.input ?? '').trim(),
+        output: String(tc.output ?? '').trim(),
+        is_public: tc.is_public === true
+      }));
+
+    if (!refSolution.trim()) {
+      toast.error('Add a reference solution before verifying');
+      return;
+    }
+
+    if (testcasesToVerify.length === 0) {
+      toast.error('Generate or add at least one test case before verifying');
+      return;
+    }
+
+    if (testcasesToVerify.some(tc => tc.input === '' || tc.output === '')) {
+      toast.error('Each test case must include both input and output before verification');
+      return;
+    }
+
+    const draftSignature = getDraftSignature(draftTestcases);
     setVerifying(true);
     setVerifyResults(null);
+    setVerifiedDraftSignature('');
     try {
       // First save reference solution
       await axios.put(
@@ -199,12 +239,17 @@ export default function ManageQuestions() {
       // Then verify
       const res = await axios.post(
         `${API}/questions/${testcaseQuestion.id}/verify`,
-        {},
+        hasDrafts
+          ? { reference_solution: refSolution, testcases: draftTestcases }
+          : { reference_solution: refSolution },
         { headers }
       );
       setVerifyResults(res.data);
+      if (hasDrafts && res.data?.allPassed) {
+        setVerifiedDraftSignature(draftSignature);
+      }
     } catch (err) {
-      alert('Verification failed: ' + (err.response?.data?.message || err.message));
+      toast.error('Verification failed: ' + (err.response?.data?.message || err.message));
     } finally {
       setVerifying(false);
     }
@@ -214,6 +259,8 @@ export default function ManageQuestions() {
     try {
       await axios.delete(`${API}/questions/${testcaseQuestion.id}/testcases/${tcId}`, { headers });
       setSavedTestcases(prev => prev.filter(tc => tc.id !== tcId));
+      setVerifyResults(null);
+      setVerifiedDraftSignature('');
     } catch (err) {
       alert('Delete failed: ' + (err.response?.data?.message || err.message));
     }
@@ -281,6 +328,7 @@ export default function ManageQuestions() {
     setTestcaseQuestion(question);
     setGeneratedTestcases([]);
     setVerifyResults(null);
+    setVerifiedDraftSignature('');
     setTestcaseDialogOpen(true);
     await loadSavedTestcases(question.id);
 
@@ -303,6 +351,8 @@ export default function ManageQuestions() {
           is_public: tc?.is_public === true
         }))
       );
+      setVerifyResults(null);
+      setVerifiedDraftSignature('');
       toast.success('Test cases generated successfully!');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to generate test cases');
@@ -312,14 +362,20 @@ export default function ManageQuestions() {
   };
 
   const updateGeneratedTestcase = (id, field, value) => {
+    setVerifyResults(null);
+    setVerifiedDraftSignature('');
     setGeneratedTestcases(prev => prev.map(tc => (tc.id === id ? { ...tc, [field]: value } : tc)));
   };
 
   const removeGeneratedTestcase = (id) => {
+    setVerifyResults(null);
+    setVerifiedDraftSignature('');
     setGeneratedTestcases(prev => prev.filter(tc => tc.id !== id));
   };
 
   const addGeneratedTestcase = () => {
+    setVerifyResults(null);
+    setVerifiedDraftSignature('');
     setGeneratedTestcases(prev => [
       ...prev,
       { id: `${Date.now()}_${prev.length}`, input: '', output: '', is_public: false }
@@ -332,22 +388,17 @@ export default function ManageQuestions() {
     setGeneratedTestcases([]);
     setSavedTestcases([]);
     setVerifyResults(null);
+    setVerifiedDraftSignature('');
     setRefSolution('');
   };
 
   const closeTestcaseDialog = () => {
-    if (generatingTestcases || approvingTestcases) return;
+    if (generatingTestcases || approvingTestcases || verifying) return;
     resetTestcaseDialog();
   };
 
   const handleApproveTestcases = async () => {
-    const finalTestcases = generatedTestcases
-      .map(tc => ({
-        input: tc.input.trim(),
-        output: tc.output.trim(),
-        is_public: tc.is_public === true
-      }))
-      .filter(tc => tc.input || tc.output);
+    const finalTestcases = getFinalDraftTestcases();
 
     if (finalTestcases.length === 0) {
       toast.error('Add at least one valid test case before confirming');
@@ -356,6 +407,11 @@ export default function ManageQuestions() {
 
     if (finalTestcases.some(tc => tc.input === '' || tc.output === '')) {
       toast.error('Each test case must include both input and output');
+      return;
+    }
+
+    if (!verifyResults?.allPassed || verifiedDraftSignature !== getDraftSignature(finalTestcases)) {
+      toast.error('Verify the current generated test cases before confirming');
       return;
     }
 
@@ -368,6 +424,8 @@ export default function ManageQuestions() {
       );
       await loadSavedTestcases(testcaseQuestion.id);
       setGeneratedTestcases([]);
+      setVerifyResults(null);
+      setVerifiedDraftSignature('');
       toast.success('Test cases approved successfully');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to approve test cases');
@@ -424,6 +482,11 @@ export default function ManageQuestions() {
     const l = LANGUAGES.find(x => x.id === Number(lid)) || LANGUAGES[0];
     return { color: l.color, name: l.name, icon: l.icon };
   };
+
+  const currentDraftTestcases = getFinalDraftTestcases();
+  const currentDraftIsVerified = generatedTestcases.length > 0
+    && verifyResults?.allPassed
+    && verifiedDraftSignature === getDraftSignature(currentDraftTestcases);
 
   return (
     <div className="lms-page-bg min-h-screen">
@@ -685,7 +748,11 @@ export default function ManageQuestions() {
           <div style={{ fontWeight: 700, marginBottom: 6 }}>Reference Solution</div>
           <textarea
             value={refSolution}
-            onChange={e => setRefSolution(e.target.value)}
+            onChange={e => {
+              setRefSolution(e.target.value);
+              setVerifyResults(null);
+              setVerifiedDraftSignature('');
+            }}
             rows={8}
             style={{
               width: '100%', fontFamily: 'monospace', fontSize: 13,
@@ -695,14 +762,19 @@ export default function ManageQuestions() {
           />
           <button
             onClick={verifyReferenceSolution}
-            disabled={verifying || !refSolution || savedTestcases.length === 0}
+            disabled={verifying || !refSolution.trim() || (generatedTestcases.length === 0 && savedTestcases.length === 0)}
             style={{
               marginTop: 8, padding: '6px 14px', background: '#0b66c3', color: '#fff',
               borderRadius: 6, border: 'none', cursor: 'pointer'
             }}
           >
-            {verifying ? 'Verifying…' : 'Verify Against Saved Test Cases'}
+            {verifying ? 'Verifying...' : generatedTestcases.length > 0 ? 'Verify Generated Test Cases' : 'Verify Saved Test Cases'}
           </button>
+          {generatedTestcases.length > 0 && !currentDraftIsVerified && (
+            <p className="text-xs text-amber-700 mt-2">
+              The current generated test cases must pass verification before confirmation.
+            </p>
+          )}
           {verifyResults && (
             <div style={{
               marginTop: 10, padding: 10, background: verifyResults.allPassed ? '#d1fae5' : '#fee2e2',
@@ -754,8 +826,8 @@ export default function ManageQuestions() {
         <div className="space-y-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-sm font-semibold text-slate-700">Review the generated cases, edit them if needed, remove unwanted ones, then confirm to save.</p>
-              <p className="text-xs text-slate-500 mt-1">Only the final reviewed array will be sent for approval.</p>
+              <p className="text-sm font-semibold text-slate-700">Generate test cases first, verify the generated cases against the reference solution, then confirm to save.</p>
+              <p className="text-xs text-slate-500 mt-1">If you edit a case after verification, run verification again before confirming.</p>
             </div>
             <div className="flex gap-2">
               <ActionButton
@@ -838,7 +910,7 @@ export default function ManageQuestions() {
               label={approvingTestcases ? 'Confirming...' : 'Confirm Test Cases'}
               icon={CheckCircle}
               onClick={handleApproveTestcases}
-              disabled={generatingTestcases || approvingTestcases || generatedTestcases.length === 0}
+              disabled={generatingTestcases || approvingTestcases || verifying || !currentDraftIsVerified}
             />
           </div>
         </div>

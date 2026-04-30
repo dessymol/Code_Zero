@@ -10,6 +10,11 @@ import axios from "axios";
 import { useNavigate } from 'react-router-dom';
 import { clearSession } from '../utils/auth';
 import {
+  aggregateStudentScores,
+  normalizeCourse,
+  normalizeSubmission
+} from '../utils/studentScoreMetrics';
+import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip as RechartTooltip, CartesianGrid, PieChart, Pie, Cell
 } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
@@ -18,6 +23,7 @@ const API_BASE = "http://localhost:5000/api";
 const API_ME = `${API_BASE}/students/me`;
 const API_COURSES_WITH_EXAMS = `${API_BASE}/students/courses-with-exams`;
 const API_SUBMISSIONS_MINE = `${API_BASE}/submissions/mine`;
+const API_STUDENT_QUESTIONS = `${API_BASE}/submissions/student-questions`;
 const API_CHANGE_PASSWORD = `${API_BASE}/students/change-password`;
 const API_UPDATE_ME = `${API_BASE}/students/me`;
 
@@ -120,6 +126,7 @@ export default function StudentProfile() {
   const [profile, setProfile] = useState(null);
   const [courses, setCourses] = useState([]);
   const [submissions, setSubmissions] = useState([]);
+  const [remainingQuestionsByCourse, setRemainingQuestionsByCourse] = useState({});
   const [fetchDebug, setFetchDebug] = useState([]);
   const [error, setError] = useState("");
 
@@ -164,7 +171,19 @@ export default function StudentProfile() {
       try {
         const r = await axios.get(API_COURSES_WITH_EXAMS, { headers });
         const raw = r?.data?.courses ?? r?.data?.data ?? r?.data ?? [];
-        if (mounted) setCourses(Array.isArray(raw) ? raw : []);
+        const normalizedCourses = Array.isArray(raw) ? raw.map(normalizeCourse) : [];
+        if (mounted) setCourses(normalizedCourses);
+
+        const remainingResponses = await Promise.allSettled(
+          normalizedCourses.map((course) => axios.get(`${API_STUDENT_QUESTIONS}/${course.id}`, { headers }))
+        );
+        const remainingByCourse = {};
+        remainingResponses.forEach((result, idx) => {
+          if (result.status !== 'fulfilled') return;
+          const payload = result.value?.data ?? {};
+          remainingByCourse[normalizedCourses[idx].id] = Array.isArray(payload.questions) ? payload.questions : [];
+        });
+        if (mounted) setRemainingQuestionsByCourse(remainingByCourse);
       } catch (err) { debug("GET /students/courses-with-exams ERROR", err); }
 
       try {
@@ -176,7 +195,9 @@ export default function StudentProfile() {
         else if (Array.isArray(payload.data)) arr = payload.data;
         else if (Array.isArray(payload.items)) arr = payload.items;
 
-        arr = arr.slice().sort((a, b) => new Date(b?.createdAt ?? 0).getTime() - new Date(a?.createdAt ?? 0).getTime());
+        arr = arr
+          .map(normalizeSubmission)
+          .sort((a, b) => new Date(b?.createdAt ?? 0).getTime() - new Date(a?.createdAt ?? 0).getTime());
         if (mounted) setSubmissions(arr);
       } catch (err) {
         debug("GET /submissions/mine ERROR", err);
@@ -191,32 +212,23 @@ export default function StudentProfile() {
   }, []);
 
   // derived metrics
+  const scoreSummary = useMemo(() => aggregateStudentScores({
+    courses,
+    submissions,
+    remainingQuestionsByCourse
+  }), [courses, submissions, remainingQuestionsByCourse]);
+  const scoreTotals = scoreSummary.totals;
   const submissionCount = Array.isArray(submissions) ? submissions.length : 0;
-  const acceptedCount = Array.isArray(submissions) ? submissions.filter(s => ((s?.status || "") + "").toLowerCase() === "accepted").length : 0;
-  const totalScore = Array.isArray(submissions) ? submissions.reduce((sum, s) => {
-    if (((s?.status || "") + "").toLowerCase() === "accepted") {
-      const sc = Number(s?.score);
-      return sum + (Number.isNaN(sc) ? 0 : sc);
-    }
-    return sum;
-  }, 0) : 0;
-  const totalPossibleScore = Array.isArray(submissions) ? (() => {
-    const seenQuestionIds = new Set();
-    return submissions.reduce((sum, s) => {
-      const questionId = s?.question_id ?? s?.questionId ?? s?.Question?.id;
-      if (questionId == null || seenQuestionIds.has(questionId)) return sum;
-      seenQuestionIds.add(questionId);
-      const maxScore = Number(s?.maxScore ?? s?.Question?.score);
-      return sum + (Number.isNaN(maxScore) ? 0 : maxScore);
-    }, 0);
-  })() : 0;
+  const acceptedCount = scoreTotals.accepted;
+  const totalScore = scoreTotals.score;
+  const totalPossibleScore = scoreTotals.totalPossibleScore;
 
-  const acceptanceRate = submissionCount > 0 ? Math.round((acceptedCount / submissionCount) * 100) : 0;
+  const acceptanceRate = scoreTotals.total > 0 ? Math.round((acceptedCount / scoreTotals.total) * 100) : 0;
 
   const topCourse = (() => {
     if (courses.length) {
       const c = courses[0];
-      return { name: c?.course_name || c?.name || c?.title || "", code: c?.course_code || c?.code || "" };
+      return { name: c?.name || "", code: c?.code || "" };
     }
     return { name: "", code: "" };
   })();
@@ -410,10 +422,10 @@ export default function StudentProfile() {
                       <tbody className="divide-y divide-slate-50">
                         {submissions.slice(0, 5).map((s, i) => (
                           <tr key={i} className="hover:bg-slate-50">
-                            <td className="px-4 py-3 font-medium text-slate-700">{s.Question?.title || s.title || `Problem ${s.question_id}`}</td>
-                            <td className="px-4 py-3 text-slate-500">{s.language || "Unknown"}</td>
+                            <td className="px-4 py-3 font-medium text-slate-700">{s.questionTitle || `Problem ${s.questionId ?? s.id}`}</td>
+                            <td className="px-4 py-3 text-slate-500">{s.raw?.language || s.raw?.language_id || "Unknown"}</td>
                             <td className="px-4 py-3">
-                              <span className={`px-2 py-1 rounded-full text-xs font-bold ${s.status === 'accepted' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                              <span className={`px-2 py-1 rounded-full text-xs font-bold ${s.status.toLowerCase() === 'accepted' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                                 {s.status}
                               </span>
                             </td>
@@ -480,13 +492,13 @@ export default function StudentProfile() {
                   <tbody className="divide-y divide-slate-100">
                     {submissions.map((s, i) => (
                       <tr key={i} className="hover:bg-slate-50">
-                        <td className="px-6 py-4 font-bold text-slate-700">{s.Question?.title || s.title || `Question ID: ${s.question_id}`}</td>
+                        <td className="px-6 py-4 font-bold text-slate-700">{s.questionTitle || `Question ID: ${s.questionId ?? s.id}`}</td>
                         <td className="px-6 py-4">
-                          <span className="px-2 py-1 bg-slate-100 rounded text-xs font-mono text-slate-600">{s.language}</span>
+                          <span className="px-2 py-1 bg-slate-100 rounded text-xs font-mono text-slate-600">{s.raw?.language || s.raw?.language_id || 'Unknown'}</span>
                         </td>
                         <td className="px-6 py-4">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold uppercase ${s.status === 'accepted' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
-                            {s.status === 'accepted' ? <CheckCircle size={12} /> : <AlertCircle size={12} />}
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold uppercase ${s.status.toLowerCase() === 'accepted' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
+                            {s.status.toLowerCase() === 'accepted' ? <CheckCircle size={12} /> : <AlertCircle size={12} />}
                             {s.status || 'Unknown'}
                           </span>
                         </td>

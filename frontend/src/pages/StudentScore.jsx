@@ -7,6 +7,11 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import StudentNavbar from './StudentNavbar';
+import {
+  aggregateStudentScores,
+  normalizeCourse,
+  normalizeSubmission
+} from '../utils/studentScoreMetrics';
 
 const API_COURSES = 'http://localhost:5000/api/students/courses-with-exams';
 const API_SUBMISSIONS = 'http://localhost:5000/api/submissions/mine';
@@ -27,6 +32,7 @@ function getCourseIcon(name, idx) {
 export default function StudentScore() {
   const [courses, setCourses] = useState([]);
   const [submissions, setSubmissions] = useState([]);
+  const [remainingQuestionsByCourse, setRemainingQuestionsByCourse] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -50,11 +56,7 @@ export default function StudentScore() {
         if (coursesRes.status === 'fulfilled') {
           const d = coursesRes.value?.data ?? {};
           const rawCourses = Array.isArray(d) ? d : (d.courses || d.data || []);
-          coursesData = rawCourses.map((c, idx) => ({
-            id: c.course_id ?? c.id ?? c._id ?? `c-${idx}`,
-            name: c.course_name ?? c.name ?? c.title ?? `Course ${idx + 1}`,
-            code: c.course_code ?? c.code ?? '',
-          }));
+          coursesData = rawCourses.map(normalizeCourse);
         }
 
         // Normalize submissions
@@ -67,43 +69,8 @@ export default function StudentScore() {
           else if (Array.isArray(d.items)) subsRaw = d.items;
         }
 
-        const normalizedSubs = subsRaw.map((s, idx) => {
-          const courseId = s.course?.id ?? s.course_id ?? s.courseId ?? s.Question?.course_id ?? null;
-          const courseName = s.course?.name ?? s.course_name ?? s.courseName ?? s.Question?.Course?.name ?? null;
-          const status = (s.status ?? s.state ?? (s.raw && s.raw.status) ?? '').toString();
-          const scoreRaw = s.score ?? s.marks ?? s.points ?? null;
-          const score = (scoreRaw != null && scoreRaw !== '') ? Number(scoreRaw) : null;
-          const maxScoreRaw = s.maxScore ?? s.questionScore ?? s.question?.score ?? s.Question?.score ?? null;
-          const maxScore = (maxScoreRaw != null && maxScoreRaw !== '') ? Number(maxScoreRaw) : null;
-          const similarityRaw = s.similarity_score ?? s.similarity_percentage ?? s.Feedback?.similarity_percentage ?? null;
-          const similarityScore = (similarityRaw != null && similarityRaw !== '') ? Number(similarityRaw) : null;
-          const createdAt = s.createdAt ?? s.created_at ?? s.created_at_date ?? null;
-
-          return {
-            id: s.id ?? s._id ?? `sub-${idx}`,
-            questionId: s.question_id ?? s.questionId ?? s.question?.id ?? s.Question?.id ?? null,
-            courseId,
-            courseName,
-            status,
-            score: Number.isNaN(score) ? null : score,
-            maxScore: Number.isNaN(maxScore) ? null : maxScore,
-            similarityScore: Number.isNaN(similarityScore) ? null : similarityScore,
-            createdAt,
-            raw: s,
-          };
-        });
-
-        const courseTotals = new Map();
-        const seenQuestionKeys = new Set();
-        normalizedSubs.forEach((s) => {
-          const key = s.courseId ?? s.courseName ?? 'unknown';
-          if (!courseTotals.has(key)) courseTotals.set(key, 0);
-          const questionKey = `${key}::${s.questionId ?? 'unknown-question'}`;
-          if (s.questionId != null && s.maxScore != null && !seenQuestionKeys.has(questionKey)) {
-            seenQuestionKeys.add(questionKey);
-            courseTotals.set(key, courseTotals.get(key) + s.maxScore);
-          }
-        });
+        const normalizedSubs = subsRaw.map(normalizeSubmission);
+        const remainingByCourse = {};
 
         if (coursesData.length) {
           const remainingQuestionResponses = await Promise.allSettled(
@@ -114,22 +81,14 @@ export default function StudentScore() {
             if (result.status !== 'fulfilled') return;
             const course = coursesData[idx];
             const payload = result.value?.data ?? {};
-            const questions = Array.isArray(payload.questions) ? payload.questions : [];
-            const remainingTotal = questions.reduce((sum, question) => {
-              const value = Number(question?.score);
-              return sum + (Number.isNaN(value) ? 0 : value);
-            }, 0);
-            const existing = courseTotals.get(course.id) ?? 0;
-            courseTotals.set(course.id, existing + remainingTotal);
+            remainingByCourse[course.id] = Array.isArray(payload.questions) ? payload.questions : [];
           });
         }
 
         if (mounted) {
-          setCourses(coursesData.map((course) => ({
-            ...course,
-            totalPossibleScore: courseTotals.get(course.id) ?? 0,
-          })));
+          setCourses(coursesData);
           setSubmissions(normalizedSubs);
+          setRemainingQuestionsByCourse(remainingByCourse);
         }
       } catch (err) {
         console.error('Fetch error:', err);
@@ -144,72 +103,8 @@ export default function StudentScore() {
   }, []);
 
   const aggregates = useMemo(() => {
-    const map = new Map();
-    courses.forEach(c => {
-      map.set(c.id, {
-        id: c.id,
-        name: c.name || c.code || c.id,
-        score: 0,
-        totalPossibleScore: Number(c.totalPossibleScore) || 0,
-        similarityTotal: 0,
-        similarityCount: 0,
-        accepted: 0,
-        total: 0
-      });
-    });
-
-    const bestByQuestion = new Map();
-    submissions.forEach((s) => {
-      const courseKey = s.courseId ?? s.courseName ?? 'unknown';
-      const questionKey = s.questionId != null
-        ? `${courseKey}::${s.questionId}`
-        : `${courseKey}::submission-${s.id}`;
-      const score = Number(s.score);
-      const safeScore = Number.isNaN(score) ? 0 : score;
-      const current = bestByQuestion.get(questionKey);
-      if (!current || safeScore > current.safeScore) {
-        bestByQuestion.set(questionKey, { ...s, courseKey, safeScore });
-      }
-    });
-
-    bestByQuestion.forEach(s => {
-      const key = s.courseId ?? s.courseName ?? 'unknown';
-      if (!map.has(key)) {
-        map.set(key, {
-          id: key,
-          name: s.courseName ?? (typeof key === 'string' ? key : 'Unknown Course'),
-          score: 0,
-          totalPossibleScore: 0,
-          similarityTotal: 0,
-          similarityCount: 0,
-          accepted: 0,
-          total: 0
-        });
-      }
-      const entry = map.get(key);
-      entry.total += 1;
-      entry.score += s.safeScore;
-      if (s.similarityScore != null) {
-        entry.similarityTotal += s.similarityScore;
-        entry.similarityCount += 1;
-      }
-
-      const maxScore = Number(s.maxScore);
-      const hasFullScore = !Number.isNaN(maxScore) && maxScore > 0
-        ? s.safeScore >= maxScore
-        : s.status?.toLowerCase() === 'accepted';
-      if (hasFullScore) {
-        entry.accepted += 1;
-      }
-    });
-
-    return Array.from(map.values()).map((course) => ({
-      ...course,
-      similarityScore: course.similarityCount > 0
-        ? Math.round(course.similarityTotal / course.similarityCount)
-        : null
-    }));
-  }, [courses, submissions]);
+    return aggregateStudentScores({ courses, submissions, remainingQuestionsByCourse }).byCourse;
+  }, [courses, submissions, remainingQuestionsByCourse]);
 
   return (
     <>

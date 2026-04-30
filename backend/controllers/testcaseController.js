@@ -111,7 +111,8 @@ exports.remove = async (req, res) => {
 };
 /**
  * POST /api/questions/:id/verify
- * Runs question.reference_solution against every saved test case.
+ * Runs question.reference_solution against draft test cases from the body,
+ * or every saved test case when no draft is provided.
  * Returns per-test-case pass/fail without saving anything.
  */
 exports.verify = async (req, res) => {
@@ -119,11 +120,27 @@ exports.verify = async (req, res) => {
         const question = await Question.findByPk(req.params.id);
         if (!question) return res.status(404).json({ message: 'Question not found' });
 
-        if (!question.reference_solution) {
+        const referenceSolution = req.body.reference_solution != null
+            ? String(req.body.reference_solution)
+            : question.reference_solution;
+
+        if (!referenceSolution) {
             return res.status(400).json({ message: 'No reference solution saved for this question' });
         }
 
-        const testcases = await db.Testcase.findAll({ where: { question_id: question.id } });
+        const incomingTestcases = req.body.testcases;
+        let testcases;
+
+        if (Array.isArray(incomingTestcases) && incomingTestcases.length > 0) {
+            testcases = incomingTestcases.map((tc, index) => ({
+                id: tc.id || index + 1,
+                input: String(tc.input ?? ''),
+                output: String(tc.output ?? '')
+            }));
+        } else {
+            testcases = await db.Testcase.findAll({ where: { question_id: question.id } });
+        }
+
         if (testcases.length === 0) {
             return res.status(400).json({ message: 'No test cases found for this question' });
         }
@@ -135,14 +152,14 @@ exports.verify = async (req, res) => {
 
         console.log(`[testcaseController] verify: Running ${testcases.length} testcases for question ${question.id}`);
         console.log(`[testcaseController] Language ID: ${question.language_id}`);
-        console.log(`[testcaseController] Reference solution (first 200 chars): ${question.reference_solution?.substring(0, 200)}`);
-        console.log(`[testcaseController] Reference solution length: ${question.reference_solution?.length}`);
+        console.log(`[testcaseController] Reference solution (first 200 chars): ${referenceSolution?.substring(0, 200)}`);
+        console.log(`[testcaseController] Reference solution length: ${referenceSolution?.length}`);
 
         // Check for Python version issues
-        if (question.language_id === 70 && question.reference_solution.includes('input()') && !question.reference_solution.includes('raw_input()')) {
+        if (question.language_id === 70 && referenceSolution.includes('input()') && !referenceSolution.includes('raw_input()')) {
             console.warn(`[testcaseController] ⚠️  WARNING: Code uses input() but language is Python 2.7 (ID 70). Python 2 uses raw_input() for string input. Consider changing to Python 3 (ID 71).`);
         }
-        if (question.language_id === 71 && question.reference_solution.includes('raw_input()')) {
+        if (question.language_id === 71 && referenceSolution.includes('raw_input()')) {
             console.warn(`[testcaseController] ⚠️  WARNING: Code uses raw_input() but language is Python 3 (ID 71). Python 3 uses input() for string input.`);
         }
 
@@ -152,7 +169,7 @@ exports.verify = async (req, res) => {
                 console.log(`[testcaseController] Running testcase ${tc.id}: input length=${tc.input?.length || 0}`);
 
                 result = await judge0Service.submitCode(
-                    question.reference_solution,
+                    referenceSolution,
                     question.language_id,
                     tc.input || '',
                     tc.output || '',
