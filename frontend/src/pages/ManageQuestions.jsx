@@ -10,8 +10,8 @@ import { io } from 'socket.io-client';
 import FacultyNavbar from './FacultyNavbar';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const API = `${import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000'}/api`;
-const SOCKET_URL = import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000';
+const API = `${import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000'}/api`;
+const SOCKET_URL = import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000';
 import { useToast } from '../context/ToastContext';
 const MotionDiv = motion.div;
 
@@ -97,7 +97,7 @@ export default function ManageQuestions() {
   const [openDialog, setOpenDialog] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({
-    title: '', description: '', sample_input: '', sample_output: '', language_id: LANGUAGES[0].id, score: 100,
+    title: '', description: '', sample_input: '', sample_output: '', reference_solution: '', language_id: LANGUAGES[0].id, score: 100,
   });
   const [testcases, setTestcases] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -166,6 +166,20 @@ export default function ManageQuestions() {
     }
   };
 
+  const loadSavedTestcases = async (questionId) => {
+    if (!questionId) {
+      setSavedTestcases([]);
+      return;
+    }
+
+    try {
+      const savedRes = await axios.get(`${API}/questions/${questionId}/testcases`, { headers });
+      setSavedTestcases(savedRes.data?.testcases || []);
+    } catch {
+      setSavedTestcases([]);
+    }
+  };
+
   const verifyReferenceSolution = async () => {
     if (!testcaseQuestion) return;
     setVerifying(true);
@@ -177,6 +191,11 @@ export default function ManageQuestions() {
         { reference_solution: refSolution },
         { headers }
       );
+      setQuestions(prev => prev.map(q => (
+        String(q.id) === String(testcaseQuestion.id)
+          ? { ...q, reference_solution: refSolution }
+          : q
+      )));
       // Then verify
       const res = await axios.post(
         `${API}/questions/${testcaseQuestion.id}/verify`,
@@ -227,6 +246,7 @@ export default function ManageQuestions() {
       const payload = {
         title: form.title, description: form.description,
         sample_input: form.sample_input, sample_output: form.sample_output,
+        reference_solution: form.reference_solution,
         language_id: Number(form.language_id), score: Number(form.score),
         course_id: Number(courseId),
         testcases: testcases
@@ -260,12 +280,9 @@ export default function ManageQuestions() {
   const openTestcaseDialog = async (question) => {
     setTestcaseQuestion(question);
     setGeneratedTestcases([]);
+    setVerifyResults(null);
     setTestcaseDialogOpen(true);
-    // Load existing saved test cases
-    try {
-      const savedRes = await axios.get(`${API}/questions/${question.id}/testcases`, { headers });
-      setSavedTestcases(savedRes.data?.testcases || []);
-    } catch { setSavedTestcases([]); }
+    await loadSavedTestcases(question.id);
 
     // Prefill reference solution if saved
     setRefSolution(question.reference_solution || '');
@@ -313,6 +330,9 @@ export default function ManageQuestions() {
     setTestcaseDialogOpen(false);
     setTestcaseQuestion(null);
     setGeneratedTestcases([]);
+    setSavedTestcases([]);
+    setVerifyResults(null);
+    setRefSolution('');
   };
 
   const closeTestcaseDialog = () => {
@@ -346,8 +366,9 @@ export default function ManageQuestions() {
         { testcases: finalTestcases },
         { headers }
       );
+      await loadSavedTestcases(testcaseQuestion.id);
+      setGeneratedTestcases([]);
       toast.success('Test cases approved successfully');
-      resetTestcaseDialog();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to approve test cases');
     } finally {
@@ -424,7 +445,7 @@ export default function ManageQuestions() {
               icon={Plus}
               onClick={() => {
                 setEditing(null);
-                setForm({ title: '', description: '', sample_input: '', sample_output: '', language_id: LANGUAGES[0].id, score: 100 });
+                setForm({ title: '', description: '', sample_input: '', sample_output: '', reference_solution: '', language_id: LANGUAGES[0].id, score: 100 });
                 setTestcases([{ input: '', output: '', is_public: false }]);
                 setOpenDialog(true);
               }}
@@ -634,6 +655,16 @@ export default function ManageQuestions() {
         <div>
           <label className="block text-sm font-bold text-slate-700 mb-1">Sample Output</label>
           <textarea className="w-full px-4 py-2 border rounded-xl outline-none font-mono text-sm bg-slate-50" value={form.sample_output} onChange={e => setForm({ ...form, sample_output: e.target.value })} rows={3} />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-sm font-bold text-slate-700 mb-1">Faculty Model Answer Code</label>
+          <textarea
+            className="w-full px-4 py-2 border rounded-xl outline-none font-mono text-sm bg-slate-50"
+            value={form.reference_solution || ''}
+            onChange={e => setForm({ ...form, reference_solution: e.target.value })}
+            rows={8}
+            placeholder="Paste the expected solution code used for similarity feedback"
+          />
         </div>
       </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">

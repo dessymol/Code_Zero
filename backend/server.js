@@ -1,9 +1,11 @@
 // server.js (updated)
 const path = require('path');
+const dotenv = require('dotenv');
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
-const dotenv = require('dotenv');
 const http = require('http');
 const { Server } = require('socket.io');
 
@@ -38,9 +40,6 @@ const db = require('./models');
 const swaggerJsdoc = require("swagger-jsdoc");
 const swaggerUi = require("swagger-ui-express");
 
-
-
-dotenv.config();
 
 const app = express();
 

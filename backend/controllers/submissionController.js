@@ -1,8 +1,13 @@
 exports.getSubmissionFeedback = async (req, res) => {
   try {
     const { id } = req.params;
+    const submissionId = Number(id);
+    if (!Number.isInteger(submissionId) || submissionId <= 0) {
+      return res.status(400).json({ message: 'Valid submission id is required' });
+    }
+
     const feedback = await db.SubmissionFeedback.findOne({
-      where: { submission_id: id }
+      where: { submission_id: submissionId }
     });
     if (!feedback) {
       return res.status(200).json({ status: 'pending' });
@@ -92,6 +97,22 @@ function normalizeOutput(s = '') {
     .trim();
 }
 
+function getJudgeStatusId(result = {}) {
+  return result.status ? result.status.id : (result.status_id || 0);
+}
+
+function getGradedStatus(awardedScore, maxScore, statusId) {
+  if (statusId !== 3) {
+    return statusId === 6 ? 'Compilation Error' : 'Runtime/Error';
+  }
+
+  const score = Number(awardedScore) || 0;
+  const total = Number(maxScore) || 0;
+  if (total > 0 && score >= total) return 'Accepted';
+  if (score > 0) return 'Partially Accepted';
+  return 'Wrong Answer';
+}
+
 const EXAM_VIOLATION_ACTION = 'EXAM_VIOLATION';
 
 async function getExamViolationLogs(studentId, courseId) {
@@ -112,6 +133,19 @@ function normalizeViolationLogs(logs = []) {
     id: log.id,
     reason: log.details?.reason || 'Violation recorded',
     time: log.createdAt
+  }));
+}
+
+function formatTestCaseResultsForFeedback(rows = []) {
+  return rows.map((row, index) => ({
+    number: index + 1,
+    testcase_id: row.test_case_id || row.testcase_id || row.testcaseId || null,
+    input: row.input || '',
+    expected_output: row.expected_output || '',
+    actual_output: row.actual_output || row.output || '',
+    passed: Boolean(row.passed),
+    status: row.status || (row.passed ? 'passed' : 'failed'),
+    error_message: row.error_message || null
   }));
 }
 
@@ -317,11 +351,12 @@ exports.submitCode = async (req, res) => {
     const stdout = normalizeOutput(rawStdout);
     const expectedRaw = (question.sample_output || '').toString();
     const expected = normalizeOutput(expectedRaw);
-    const statusId = judgeResult.status ? judgeResult.status.id : (judgeResult.status_id || 0);
+    const statusId = getJudgeStatusId(judgeResult);
 
     let awarded_score = 0;
     const qScore = Number(question.score) || 0;
-    let testResultRows = []; // Declare here so it's in scope later
+    let testResultRows = []; // DB rows; also reused for AI feedback context.
+    let gradingStatusId = statusId;
 
     if (testcases.length > 0) {
       // ── Multi-testcase scoring path ───────────────────────────────
@@ -344,20 +379,29 @@ exports.submitCode = async (req, res) => {
 
         const tcStdout = normalizeOutput((tcResult.stdout || '').toString());
         const tcExpected = normalizeOutput((tc.output || '').toString());
-        const tcStatusId = tcResult.status ? tcResult.status.id : 0;
+        const tcStatusId = getJudgeStatusId(tcResult);
         const passed = tcStatusId === 3 && tcStdout === tcExpected;
         if (passed) passedCount++;
+        if (tcStatusId !== 3 && gradingStatusId === 3) gradingStatusId = tcStatusId;
 
         testResultRows.push({
           submission_id: null, // filled in after submission is created
+          test_case_id: tc.id,
           testcase_id: tc.id,
+          input: tc.input || '',
+          expected_output: tcExpected,
           passed,
+          status: passed ? 'passed' : (tcStatusId === 3 ? 'failed' : 'error'),
+          output: tcStdout,
           actual_output: tcStdout,
-          execution_time: tcResult.time ? String(tcResult.time) : null
+          execution_time: tcResult.time ? Number(tcResult.time) : null,
+          memory_usage: tcResult.memory != null ? Number(tcResult.memory) : null,
+          error_message: tcResult.stderr || tcResult.compile_output || null
         });
       }
 
       awarded_score = Math.round((passedCount / testcases.length) * qScore);
+      if (passedCount > 0) gradingStatusId = 3;
 
       // Store per-testcase results (after submission row is created — see Step C)
       // We carry testResultRows forward via a closure variable.
@@ -369,7 +413,8 @@ exports.submitCode = async (req, res) => {
       const stdout = normalizeOutput(rawStdout);
       const expectedRaw = (question.sample_output || '').toString();
       const expected = normalizeOutput(expectedRaw);
-      const statusId = judgeResult.status ? judgeResult.status.id : (judgeResult.status_id || 0);
+      const statusId = getJudgeStatusId(judgeResult);
+      gradingStatusId = statusId;
 
       if (statusId === 3 && expected !== '') {
         awarded_score = (stdout === expected) ? qScore : 0;
@@ -377,6 +422,8 @@ exports.submitCode = async (req, res) => {
         awarded_score = qScore;
       }
     }
+
+    const gradedStatus = getGradedStatus(awarded_score, qScore, gradingStatusId);
 
     // Find existing submission (your existing code)
     const startOfDay = new Date();
@@ -403,7 +450,7 @@ exports.submitCode = async (req, res) => {
       existing.code = code;
       existing.language_id = Number(language_id);
       existing.output = JSON.stringify(judgeResult);
-      existing.status = judgeResult.status ? (judgeResult.status.description || '') : (judgeResult.status_description || '');
+      existing.status = gradedStatus;
       existing.score = Number(awarded_score);
       existing.execution_time = judgeResult.time ? String(judgeResult.time) : existing.execution_time || null;
       existing.updatedAt = new Date();
@@ -419,7 +466,7 @@ exports.submitCode = async (req, res) => {
         question_id,
         student_id,
         output: JSON.stringify(judgeResult),
-        status: judgeResult.status ? (judgeResult.status.description || '') : (judgeResult.status_description || ''),
+        status: gradedStatus,
         execution_time: judgeResult.time ? String(judgeResult.time) : null,
         score: Number(awarded_score),
         token: submissionToken,
@@ -433,7 +480,15 @@ exports.submitCode = async (req, res) => {
       const submissionId = submission.id;
       setImmediate(async () => {
         try {
-          const rows = testResultRows.map(r => ({ ...r, submission_id: submissionId }));
+          const rows = testResultRows.map(r => ({
+            submission_id: submissionId,
+            test_case_id: r.test_case_id,
+            status: r.status,
+            execution_time: r.execution_time,
+            memory_usage: r.memory_usage,
+            output: r.output,
+            error_message: r.error_message
+          }));
           await db.TestResult.bulkCreate(rows);
         } catch (err) {
           console.warn('[TestResults] Failed to save test results:', err.message);
@@ -442,9 +497,13 @@ exports.submitCode = async (req, res) => {
     }
     // ── Async AI Feedback (fire-and-forget) ──────────────────────
     // This runs AFTER the response is sent. Student never waits for this.
-    if (process.env.GEMINI_API_KEY || process.env.LLM_PROVIDER === 'local') {
+    if (process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY || process.env.LLM_PROVIDER === 'local') {
       const submissionId = submission.id;
       const languageName = LANGUAGE_ID_MAP[Number(language_id)] || `Language ${language_id}`;
+      const inputToUse = stdin || question.sample_input || '';
+      const faculty = question.faculty_id
+        ? await User.findByPk(question.faculty_id, { attributes: ['llm_provider'] })
+        : null;
       const feedbackPayload = {
         code,
         input: inputToUse,
@@ -452,11 +511,14 @@ exports.submitCode = async (req, res) => {
         question: {
           title: question.title,
           description: question.description,
-          sample_output: question.sample_output
+          sample_output: question.sample_output,
+          reference_solution: question.reference_solution
         },
         judgeResult,
         score: awarded_score,
-        maxScore: question.score
+        maxScore: question.score,
+        testCaseResults: formatTestCaseResultsForFeedback(testResultRows),
+        llmProvider: faculty?.llm_provider
       };
 
       console.log(`[Feedback] Starting generation for submission ${submissionId}`);
@@ -473,6 +535,9 @@ exports.submitCode = async (req, res) => {
             what_went_wrong: feedback.what_went_wrong || null,
             hint: feedback.hint || null,
             positive: feedback.positive || null,
+            similarity_percentage: feedback.similarity_percentage != null ? Number(feedback.similarity_percentage) : null,
+            similarity_feedback: feedback.similarity_feedback || null,
+            testcase_feedback: feedback.testcase_feedback || null,
             status: 'done'
           });
           console.log(`[Feedback] Successfully saved feedback for submission ${submissionId}`);
@@ -964,6 +1029,94 @@ exports.getCourseSubmissionsForFaculty = async (req, res) => {
   }
 };
 
+exports.getFacultySummary = async (req, res) => {
+  try {
+    const facultyId = req.user && req.user.id;
+    if (!facultyId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const faculty = await User.findByPk(facultyId, {
+      include: [
+        {
+          model: Course,
+          as: 'FacultyCourses',
+          through: { attributes: [] },
+          attributes: ['id', 'name', 'course_code', 'is_active']
+        }
+      ]
+    });
+
+    if (!faculty) return res.status(404).json({ success: false, message: 'Faculty not found' });
+
+    const courses = Array.isArray(faculty.FacultyCourses) ? faculty.FacultyCourses : [];
+    const courseIds = courses.map(c => c.id).filter(Boolean);
+
+    if (!courseIds.length) {
+      return res.status(200).json({ success: true, courses: [], courseStatus: {}, timeseries: [] });
+    }
+
+    const submissions = await Submission.findAll({
+      include: [{ model: Question, attributes: ['id', 'course_id'], where: { course_id: courseIds } }],
+      attributes: ['id', 'createdAt']
+    });
+
+    const studentCourses = await Course.findAll({
+      where: { id: courseIds },
+      include: [{ model: Student, attributes: ['id'] }],
+      attributes: ['id']
+    });
+
+    const submissionsByCourse = {};
+    const timeseriesMap = {};
+
+    submissions.forEach((submission) => {
+      const courseId = submission.Question?.course_id;
+      if (courseId) {
+        submissionsByCourse[courseId] = (submissionsByCourse[courseId] || 0) + 1;
+      }
+      const createdAt = submission.createdAt ? new Date(submission.createdAt).toISOString().slice(0, 10) : null;
+      if (createdAt) {
+        timeseriesMap[createdAt] = (timeseriesMap[createdAt] || 0) + 1;
+      }
+    });
+
+    const studentCounts = {};
+    studentCourses.forEach((course) => {
+      const uniqueStudents = new Set((course.Students || []).map(s => s.id).filter(Boolean));
+      studentCounts[course.id] = uniqueStudents.size;
+    });
+
+    const summaryCourses = courses.map((course) => ({
+      id: course.id,
+      name: course.name,
+      course_name: course.name,
+      submissionsCount: submissionsByCourse[course.id] || 0,
+      studentCount: studentCounts[course.id] || 0,
+      course_status: course.is_active ? 'Active' : 'Inactive',
+      status: course.is_active ? 'Active' : 'Inactive'
+    }));
+
+    const courseStatus = summaryCourses.reduce((acc, current) => {
+      const key = current.status || 'Unknown';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+
+    const now = new Date();
+    const timeseries = [];
+    for (let i = 8; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(now.getDate() - i);
+      const dateKey = date.toISOString().slice(0, 10);
+      timeseries.push({ date: dateKey, total_submissions: timeseriesMap[dateKey] || 0 });
+    }
+
+    return res.status(200).json({ success: true, courses: summaryCourses, courseStatus, timeseries });
+  } catch (error) {
+    console.error('getFacultySummary error:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching faculty summary', error: error.message });
+  }
+};
+
 
 exports.getMySubmissions = async (req, res) => {
   try {
@@ -982,6 +1135,12 @@ exports.getMySubmissions = async (req, res) => {
           model: Student,
           attributes: ['id', 'name', 'email'],
           include: [{ model: Batch, attributes: ['id', 'name', 'code'] }]
+        },
+        {
+          model: db.SubmissionFeedback,
+          as: 'Feedback',
+          attributes: ['similarity_percentage', 'similarity_feedback', 'status'],
+          required: false
         }
       ],
       order: [['createdAt', 'DESC']],
@@ -996,6 +1155,9 @@ exports.getMySubmissions = async (req, res) => {
       course: s.Question?.Course ? { id: s.Question.Course.id, name: s.Question.Course.name, code: s.Question.Course.course_code || s.Question.Course.code } : null,
       status: s.status,
       score: s.score,
+      similarity_score: s.Feedback?.similarity_percentage ?? null,
+      similarity_feedback: s.Feedback?.similarity_feedback ?? null,
+      feedback_status: s.Feedback?.status ?? null,
       createdAt: s.createdAt,
       student_batches: (s.Student?.Batches || []).map(b => ({ id: b.id, name: b.name, code: b.code }))
     }));

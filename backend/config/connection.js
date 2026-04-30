@@ -1,6 +1,8 @@
 const { Sequelize } = require('sequelize');
+const path = require('path');
 const logger = console;
-require('dotenv').config();
+require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
+const { ensureApplicationSchema } = require('../services/schemaService');
 
 const sequelize = new Sequelize(
   process.env.DB_NAME,
@@ -37,19 +39,21 @@ const testConnection = async () => {
     await sequelize.authenticate();
     logger.info('Database connection established successfully.');
 
-    // Sync models with database schema
-    // Use alter: true to add new columns to existing tables
+    // Create missing tables on first boot, but do not alter existing tables by default.
+    // Repeated alter syncs can create duplicate MySQL indexes until the table hits
+    // "Too many keys specified; max 64 keys allowed".
     const syncOptions = {
-      alter: true,  // Add missing columns to existing tables
-      force: false  // Don't drop/recreate tables
+      alter: String(process.env.DB_SYNC_ALTER || '').toLowerCase() === 'true',
+      force: false
     };
 
     try {
       await sequelize.sync(syncOptions);
       logger.info('Database schema synchronized successfully.');
+      await ensureApplicationSchema(sequelize, logger);
     } catch (syncErr) {
       logger.warn('Database schema sync encountered an issue:', syncErr.message);
-      logger.warn('This may indicate permission issues or pre-existing schema inconsistencies.');
+      logger.warn('Set DB_SYNC_ALTER=false and use targeted migrations if this is an index-limit error.');
       logger.warn('Continuing anyway - some operations may fail if expected columns are missing.');
       // Don't exit here - let the server start anyway
     }

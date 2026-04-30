@@ -8,8 +8,8 @@ import {
 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 
-const API_SUBMISSIONS = 'http://localhost:3000/api/submissions/mine';
-const API_EXPORT_MY = 'http://localhost:3000/api/export/students/me/submissions/export';
+const API_SUBMISSIONS = 'http://localhost:5000/api/submissions/mine';
+const API_EXPORT_MY = 'http://localhost:5000/api/export/students/me/submissions/export';
 
 const StatusBadge = ({ status }) => {
   const s = (status || '').toLowerCase();
@@ -81,6 +81,7 @@ export default function StudentSubmissions() {
           }) || null,
           status: s.status ?? s.state ?? null,
           score: s.score ?? s.marks ?? null,
+          similarityScore: s.similarity_score ?? s.similarity_percentage ?? s.Feedback?.similarity_percentage ?? null,
           createdAt: s.createdAt ?? s.created_at ?? s.created_at_date ?? s.created_on ?? null,
           raw: s,
         }));
@@ -291,6 +292,7 @@ export default function StudentSubmissions() {
                         <th className="px-6 py-3">Problem Title</th>
                         <th className="px-6 py-3">Status</th>
                         <th className="px-6 py-3 text-center">Score</th>
+                        <th className="px-6 py-3 text-center">Similarity</th>
                         <th className="px-6 py-3 text-right">Time</th>
                       </tr>
                     </thead>
@@ -310,6 +312,11 @@ export default function StudentSubmissions() {
                           <td className="px-6 py-4 text-center">
                             <span className={`font-mono font-bold ${item.score === 100 ? 'text-emerald-600' : 'text-slate-600'}`}>
                               {item.score ?? '-'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <span className="font-mono font-bold text-indigo-600">
+                              {item.similarityScore != null ? `${item.similarityScore}%` : '-'}
                             </span>
                           </td>
                           <td className="px-6 py-4 text-right text-sm text-slate-400 font-mono">

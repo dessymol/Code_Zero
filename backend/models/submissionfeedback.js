@@ -17,6 +17,16 @@ module.exports = (sequelize, DataTypes) => {
         positive: {
             type: DataTypes.TEXT,
         },
+        similarity_percentage: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+        },
+        similarity_feedback: {
+            type: DataTypes.TEXT,
+        },
+        testcase_feedback: {
+            type: DataTypes.TEXT,
+        },
         status: {
             type: DataTypes.ENUM('pending', 'done', 'failed'),
             defaultValue: 'pending',

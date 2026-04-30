@@ -4,6 +4,7 @@ const { User } = require('../models');
 const ApiError = require('../utils/ApiError');
 const { Op } = require('sequelize'); 
 const { writeAuditLog } = require('../services/auditLogService');
+const { getProviderConfig, normalizeProvider, SUPPORTED_PROVIDERS } = require('../services/llmServices');
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 exports.login = async (req, res, next) => {
@@ -196,6 +197,77 @@ exports.updateMe = async (req, res, next) => {
         )
       );
     }
+    next(err);
+  }
+};
+
+exports.getMyLlmProvider = async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return next(new ApiError(401, 'Authentication required'));
+
+    const user = await User.findByPk(userId, {
+      attributes: ['id', 'role', 'llm_provider']
+    });
+    if (!user) return next(new ApiError(404, 'User not found'));
+    if (user.role !== 'faculty') {
+      return next(new ApiError(403, 'Only faculty can manage LLM provider preferences'));
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        selectedProvider: normalizeProvider(user.llm_provider),
+        supportedProviders: SUPPORTED_PROVIDERS,
+        runtime: getProviderConfig()
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.updateMyLlmProvider = async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return next(new ApiError(401, 'Authentication required'));
+
+    const requestedProvider = String(req.body?.provider || '').toLowerCase().trim();
+    if (!SUPPORTED_PROVIDERS.includes(requestedProvider)) {
+      return next(new ApiError(400, `Provider must be one of: ${SUPPORTED_PROVIDERS.join(', ')}`));
+    }
+
+    const user = await User.findByPk(userId);
+    if (!user) return next(new ApiError(404, 'User not found'));
+    if (user.role !== 'faculty') {
+      return next(new ApiError(403, 'Only faculty can manage LLM provider preferences'));
+    }
+
+    user.llm_provider = requestedProvider;
+    await user.save();
+
+    await writeAuditLog({
+      actorUserId: user.id,
+      actorRole: user.role,
+      action: 'update_llm_provider',
+      targetType: 'user',
+      targetId: user.id,
+      status: 'success',
+      details: {
+        provider: requestedProvider
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'LLM provider updated',
+      data: {
+        selectedProvider: requestedProvider,
+        supportedProviders: SUPPORTED_PROVIDERS,
+        runtime: getProviderConfig()
+      }
+    });
+  } catch (err) {
     next(err);
   }
 };

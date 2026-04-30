@@ -10,6 +10,23 @@ const {
   Student
 } = require('../models');
 
+const isFacultyAssignedToCourse = async (facultyId, courseId) => {
+  if (!facultyId || !courseId) return false;
+
+  const faculty = await User.findByPk(facultyId, {
+    include: [{
+      model: Course,
+      as: 'FacultyCourses',
+      attributes: ['id'],
+      through: { attributes: [] },
+      where: { id: courseId },
+      required: false
+    }]
+  });
+
+  return Boolean(faculty?.FacultyCourses?.length);
+};
+
 /**
  * Create a question (faculty)
  * POST /api/questions/add
@@ -44,6 +61,7 @@ exports.createQuestion = async (req, res) => {
       course_id,
       language_id,
       score,
+      reference_solution = '',
     } = req.body || {};
 
     // basic validation
@@ -69,6 +87,7 @@ exports.createQuestion = async (req, res) => {
       faculty_id: facultyId === null ? null : Number(facultyId),
       language_id: Number(language_id),
       score: Number(score),
+      reference_solution: reference_solution ? String(reference_solution) : null,
     };
 
     const newQuestion = await Question.create(payload);
@@ -101,7 +120,10 @@ exports.updateQuestion = async (req, res) => {
     const user = req.user || {};
     const requesterId = Number(user.id || 0);
     const isAdmin = user.role === 'admin' || user.isAdmin;
-    if (!isAdmin && Number(question.faculty_id) !== requesterId) {
+    const isOwner = Number(question.faculty_id) === requesterId;
+    const isAssignedFaculty = !isAdmin && await isFacultyAssignedToCourse(requesterId, question.course_id);
+
+    if (!isAdmin && !isOwner && !isAssignedFaculty) {
       return res.status(403).json({ message: 'Forbidden: not owner' });
     }
 

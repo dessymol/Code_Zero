@@ -75,6 +75,8 @@ export default function StudentScore() {
           const score = (scoreRaw != null && scoreRaw !== '') ? Number(scoreRaw) : null;
           const maxScoreRaw = s.maxScore ?? s.questionScore ?? s.question?.score ?? s.Question?.score ?? null;
           const maxScore = (maxScoreRaw != null && maxScoreRaw !== '') ? Number(maxScoreRaw) : null;
+          const similarityRaw = s.similarity_score ?? s.similarity_percentage ?? s.Feedback?.similarity_percentage ?? null;
+          const similarityScore = (similarityRaw != null && similarityRaw !== '') ? Number(similarityRaw) : null;
           const createdAt = s.createdAt ?? s.created_at ?? s.created_at_date ?? null;
 
           return {
@@ -85,6 +87,7 @@ export default function StudentScore() {
             status,
             score: Number.isNaN(score) ? null : score,
             maxScore: Number.isNaN(maxScore) ? null : maxScore,
+            similarityScore: Number.isNaN(similarityScore) ? null : similarityScore,
             createdAt,
             raw: s,
           };
@@ -148,12 +151,28 @@ export default function StudentScore() {
         name: c.name || c.code || c.id,
         score: 0,
         totalPossibleScore: Number(c.totalPossibleScore) || 0,
+        similarityTotal: 0,
+        similarityCount: 0,
         accepted: 0,
         total: 0
       });
     });
 
-    submissions.forEach(s => {
+    const bestByQuestion = new Map();
+    submissions.forEach((s) => {
+      const courseKey = s.courseId ?? s.courseName ?? 'unknown';
+      const questionKey = s.questionId != null
+        ? `${courseKey}::${s.questionId}`
+        : `${courseKey}::submission-${s.id}`;
+      const score = Number(s.score);
+      const safeScore = Number.isNaN(score) ? 0 : score;
+      const current = bestByQuestion.get(questionKey);
+      if (!current || safeScore > current.safeScore) {
+        bestByQuestion.set(questionKey, { ...s, courseKey, safeScore });
+      }
+    });
+
+    bestByQuestion.forEach(s => {
       const key = s.courseId ?? s.courseName ?? 'unknown';
       if (!map.has(key)) {
         map.set(key, {
@@ -161,20 +180,35 @@ export default function StudentScore() {
           name: s.courseName ?? (typeof key === 'string' ? key : 'Unknown Course'),
           score: 0,
           totalPossibleScore: 0,
+          similarityTotal: 0,
+          similarityCount: 0,
           accepted: 0,
           total: 0
         });
       }
       const entry = map.get(key);
       entry.total += 1;
-      if (s.status?.toLowerCase() === 'accepted') {
+      entry.score += s.safeScore;
+      if (s.similarityScore != null) {
+        entry.similarityTotal += s.similarityScore;
+        entry.similarityCount += 1;
+      }
+
+      const maxScore = Number(s.maxScore);
+      const hasFullScore = !Number.isNaN(maxScore) && maxScore > 0
+        ? s.safeScore >= maxScore
+        : s.status?.toLowerCase() === 'accepted';
+      if (hasFullScore) {
         entry.accepted += 1;
-        const sc = Number(s.score);
-        if (!isNaN(sc)) entry.score += sc;
       }
     });
 
-    return Array.from(map.values());
+    return Array.from(map.values()).map((course) => ({
+      ...course,
+      similarityScore: course.similarityCount > 0
+        ? Math.round(course.similarityTotal / course.similarityCount)
+        : null
+    }));
   }, [courses, submissions]);
 
   return (
@@ -248,6 +282,13 @@ export default function StudentScore() {
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Scored Score</p>
                         <div className="text-4xl font-black bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">
                           {course.score} / {course.totalPossibleScore}
+                        </div>
+                      </div>
+
+                      <div className="mb-6 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3">
+                        <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider mb-1">Similarity Score</p>
+                        <div className="text-2xl font-black text-indigo-700">
+                          {course.similarityScore != null ? `${course.similarityScore}%` : 'Pending'}
                         </div>
                       </div>
 

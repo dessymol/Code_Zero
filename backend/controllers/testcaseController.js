@@ -2,7 +2,7 @@
 const db = require('../models');
 const { generateTestCases } = require('../services/llmServices');
 
-const { Question, Testcase } = db;
+const { Question, Testcase, User } = db;
 
 /**
  * POST /api/questions/:id/testcases/generate
@@ -14,7 +14,11 @@ exports.generate = async (req, res) => {
         if (!question) return res.status(404).json({ message: 'Question not found' });
 
         const count = parseInt(process.env.TESTCASE_COUNT || '5', 10);
-        const testcases = await generateTestCases(question, count);
+        const faculty = await User.findByPk(req.user.id, { attributes: ['llm_provider'] });
+        const testcases = await generateTestCases({
+            ...question.toJSON(),
+            llmProvider: faculty?.llm_provider
+        }, count);
 
         return res.json({ success: true, testcases });
     } catch (err) {
@@ -163,6 +167,20 @@ exports.verify = async (req, res) => {
                 }
             } catch (e) {
                 console.error(`[testcaseController] Testcase ${tc.id} error:`, e.message);
+
+                // Handle RapidAPI quota exceeded
+                if (e.response?.status === 429 || e.message?.includes('429')) {
+                    return {
+                        testcase_id: tc.id,
+                        input: tc.input,
+                        expected: tc.output,
+                        actual: 'QUOTA_EXCEEDED',
+                        passed: false,
+                        status: 'Quota Exceeded - Cannot verify',
+                        error: 'RapidAPI daily quota exceeded. Please upgrade plan or wait for reset.'
+                    };
+                }
+
                 return { testcase_id: tc.id, input: tc.input, passed: false, error: e.message };
             }
             const actual = normalizeOutput(result.stdout || '');

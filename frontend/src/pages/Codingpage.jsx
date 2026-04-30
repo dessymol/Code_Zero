@@ -16,7 +16,7 @@ const RAW_BACKEND_API_URL =
   import.meta.env.VITE_API_ORIGIN ||
   import.meta.env.VITE_BACKEND_URL ||
   import.meta.env.VITE_API_URL ||
-  'http://localhost:3000';
+  'http://localhost:5000';
 const BACKEND_API_URL = RAW_BACKEND_API_URL.replace(/\/api\/?$/, '');
 const EXAM_STATUS_API = `${BACKEND_API_URL}/api/submissions/exam-status`;
 const EXAM_VIOLATION_API = `${BACKEND_API_URL}/api/submissions/exam-violations`;
@@ -211,10 +211,6 @@ const CodingPage = () => {
     setViolations(violationEntries);
     setRemainingViolations(Math.max(0, limit - violationEntries.length));
     setShowWarning(violationEntries.length === Math.max(0, limit - 1));
-    if (violationEntries.length >= limit) {
-      setExamBlocked(true);
-      setExamBlockMessage('This exam is locked because the maximum number of violations has already been reached.');
-    }
   };
 
   const recordViolationOnServer = async (reason) => {
@@ -751,7 +747,7 @@ const CodingPage = () => {
         return;
       }
 
-      const stdin = useCustomInput ? customStdin : (sample_input || '');
+      const stdin = sample_input || '';
       console.log('📤 ========== Submit Request Started ==========');
       console.log('📝 Question ID:', qid);
       console.log('📥 Using input:', stdin);
@@ -976,8 +972,8 @@ const CodingPage = () => {
             syncViolationState(existingViolations, limitFromStatus);
 
             if (statusData.blocked) {
-              setExamBlocked(true);
-              setExamBlockMessage('This exam was already ended because the allowed violation limit was exceeded.');
+              setExamBlocked(false);
+              setExamBlockMessage('');
             }
           } catch (statusErr) {
             console.error('Could not load exam violation status:', statusErr);
@@ -1045,20 +1041,7 @@ const CodingPage = () => {
             Read the following carefully. You must acknowledge all items to start the exam.
           </p>
 
-          {examBlocked && (
-            <div style={{
-              marginBottom: 16,
-              padding: '12px 14px',
-              borderRadius: 8,
-              backgroundColor: '#fdecea',
-              color: '#b71c1c',
-              border: '1px solid #f5c2c7'
-            }}>
-              {examBlockMessage || 'This exam is locked due to previous violations.'}
-            </div>
-          )}
-
-          {!examBlocked && violations.length > 0 && (
+          {violations.length > 0 && (
             <div style={{
               marginBottom: 16,
               padding: '12px 14px',
@@ -1097,18 +1080,20 @@ const CodingPage = () => {
             <button
               onClick={() => {
                 if (ackState.every(Boolean)) {
+                  setExamBlocked(false);
+                  setExamBlockMessage('');
                   goFullScreen(document.documentElement);
                   setStarted(true);
                 }
               }}
-              disabled={!ackState.every(Boolean) || examBlocked}
+              disabled={!ackState.every(Boolean)}
               style={{
-                backgroundColor: ackState.every(Boolean) && !examBlocked ? '#32bb5fff' : '#36be24da',
+                backgroundColor: ackState.every(Boolean) ? '#32bb5fff' : '#36be24da',
                 color: '#0b0c0bff',
                 border: 'none',
                 padding: '10px 18px',
                 borderRadius: 8,
-                cursor: ackState.every(Boolean) && !examBlocked ? 'pointer' : 'not-allowed',
+                cursor: ackState.every(Boolean) ? 'pointer' : 'not-allowed',
                 fontWeight: 700
               }}
             >
@@ -1386,6 +1371,11 @@ const CodingPage = () => {
                 }}>
                   <div style={{ fontWeight: 700, color: '#6d28d9', marginBottom: 8 }}>🤖 AI Feedback</div>
                   {fb.summary && <p style={{ margin: '0 0 6px' }}>{fb.summary}</p>}
+                  {fb.similarity_percentage !== null && fb.similarity_percentage !== undefined && (
+                    <p style={{ margin: '6px 0', color: '#4338ca' }}>
+                      <strong>Similarity Score:</strong> {fb.similarity_percentage}%{fb.similarity_feedback ? ` - ${fb.similarity_feedback}` : ''}
+                    </p>
+                  )}
                   {fb.what_went_wrong && (
                     <p style={{ margin: '6px 0', color: '#b91c1c' }}>⚠ <strong>Issue:</strong> {fb.what_went_wrong}</p>
                   )}

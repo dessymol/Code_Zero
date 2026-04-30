@@ -34,7 +34,7 @@ const NotFound = lazy(() => import('./pages/NotFound'));
 const Setup = lazy(() => import('./pages/Setup'));
 const SuperAdminDashboard = lazy(() => import('./pages/SuperAdminDashboard'));
 
-const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000';
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000';
 
 const RouteLoader = () => (
   <div className="min-h-screen w-full lms-page-bg flex items-center justify-center">

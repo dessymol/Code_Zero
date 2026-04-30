@@ -41,9 +41,9 @@ router.post('/setup/sync-db', async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Invalid setup secret' });
     }
 
-    const { force } = req.body || {};
+    const { force, alter } = req.body || {};
     const options = {
-      alter: true,
+      alter: Boolean(alter),
       force: Boolean(force)
     };
 

@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import FacultyNavbar from './FacultyNavbar';
 import { motion } from 'framer-motion';
 
-const API = 'http://localhost:3000/api';
+const API = 'http://localhost:5000/api';
 const COLORS = ['#7c3aed','#2563eb','#059669','#d97706','#dc2626','#0891b2'];
 
 export default function FacultyViewCourses() {
@@ -20,6 +20,7 @@ export default function FacultyViewCourses() {
     name: c.name ?? c.course_name ?? c.title ?? c.courseTitle ?? c.course_title ?? '',
     course_code: c.course_code ?? c.code ?? c.courseCode ?? c.courseCodeValue ?? '',
     description: c.description ?? c.course_description ?? c.course_desc ?? c.desc ?? c.details ?? c.summary ?? '',
+    is_active: typeof c.is_active === 'boolean' ? c.is_active : true,
   });
 
   const fetchCourses = async () => {
@@ -95,7 +96,9 @@ export default function FacultyViewCourses() {
                     <div className="flex-1" />
                     {/* Status */}
                     <div className="flex items-center gap-2 mb-4">
-                      <span className="lms-badge lms-badge-green gap-1"><Activity size={10} /> Active</span>
+                      <span className={course.is_active ? 'lms-badge lms-badge-green gap-1' : 'lms-badge gap-1 bg-slate-100 text-slate-600'}>
+                        <Activity size={10} /> {course.is_active ? 'Active' : 'Archived'}
+                      </span>
                     </div>
                     {/* Actions */}
                     <div className="grid grid-cols-3 gap-2">

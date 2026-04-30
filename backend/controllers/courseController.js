@@ -207,7 +207,7 @@ exports.getCoursesForFaculty = async (req, res) => {
           model: Course,
           as: 'FacultyCourses',
           through: { attributes: [] }, // exclude junction table details
-          where: { is_active: true },  // <<< only active courses
+          attributes: ['id', 'name', 'course_code', 'description', 'is_active', 'allowed_violations'],
           required: false
         }
       ]
@@ -217,9 +217,16 @@ exports.getCoursesForFaculty = async (req, res) => {
       return res.status(404).json({ message: 'Faculty not found' });
     }
 
+    const courses = [...(facultyWithCourses.FacultyCourses || [])].sort((a, b) => {
+      if (Boolean(a.is_active) !== Boolean(b.is_active)) {
+        return Number(Boolean(b.is_active)) - Number(Boolean(a.is_active));
+      }
+      return String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' });
+    });
+
     res.status(200).json({
       message: 'Courses fetched successfully',
-      courses: facultyWithCourses.FacultyCourses || []
+      courses
     });
   } catch (error) {
     console.error('Error fetching courses for faculty:', error);
@@ -264,7 +271,6 @@ exports.getBatchesForFaculty = async (req, res) => {
     const courses = await Course.findAll({
       include: [{ model: User, as: 'Faculties', where: { id: facultyId }, attributes: ['id'] }],
       attributes: ['id', 'name', 'course_code'],
-      where: { is_active: true }
     });
 
     const courseIds = courses.map(c => c.id);

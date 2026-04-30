@@ -1,22 +1,42 @@
 // backend/services/llmService.js
 // Central LLM service. All callers use this file only.
-// Primary provider is controlled by LLM_PROVIDER in .env.
-// If the primary provider fails, we fall back to the secondary adapter.
+// Primary provider can be passed per request, then falls back to LLM_PROVIDER.
+// If the primary provider fails, we fall back through the remaining adapters.
 
-const provider = (process.env.LLM_PROVIDER || 'gemini').toLowerCase().trim();
+const DEFAULT_PROVIDER = 'gemini';
+const SUPPORTED_PROVIDERS = ['gemini', 'groq', 'local'];
 
 const adapters = {
     gemini: require('./adapters/geminiAdapters'),
+    groq: require('./adapters/groqAdapter'),
     local: require('./adapters/ollamaAdapter'),
 };
 
-function getAdapterOrder() {
-    if (provider === 'local') return ['local', 'gemini'];
-    return ['gemini', 'local'];
+function normalizeProvider(value) {
+    const provider = String(value || process.env.LLM_PROVIDER || DEFAULT_PROVIDER).toLowerCase().trim();
+    return SUPPORTED_PROVIDERS.includes(provider) ? provider : DEFAULT_PROVIDER;
 }
 
-async function callWithFallback(prompt) {
-    const order = getAdapterOrder();
+function getAdapterOrder(preferredProvider) {
+    const primary = normalizeProvider(preferredProvider);
+    return [primary, ...SUPPORTED_PROVIDERS.filter((name) => name !== primary)];
+}
+
+function getProviderConfig() {
+    return {
+        selected: normalizeProvider(process.env.LLM_PROVIDER),
+        providers: SUPPORTED_PROVIDERS.map((name) => ({
+            name,
+            configured:
+                name === 'gemini' ? Boolean(process.env.GEMINI_API_KEY) :
+                name === 'groq' ? Boolean(process.env.GROQ_API_KEY) :
+                true
+        }))
+    };
+}
+
+async function callWithFallback(prompt, options = {}) {
+    const order = getAdapterOrder(options.provider);
     const errors = [];
 
     for (const name of order) {
@@ -43,19 +63,19 @@ async function callWithFallback(prompt) {
  */
 async function generateTestCases(question, count = 5) {
     const prompt = buildTestCasePrompt(question, count);
-    const raw = await callWithFallback(prompt);
+    const raw = await callWithFallback(prompt, { provider: question?.llmProvider || question?.llm_provider });
     return parseJsonArray(raw, 'test cases');
 }
 
 /**
  * Generate feedback for a submission.
- * @param {object} params - { code, input, languageName, question, judgeResult, score, maxScore }
- * @returns {Promise<{summary, what_went_wrong, hint, positive}>}
+ * @param {object} params - { code, input, languageName, question, judgeResult, score, maxScore, testCaseResults }
+ * @returns {Promise<{summary, what_went_wrong, hint, positive, similarity_percentage, similarity_feedback, testcase_feedback}>}
  */
 async function generateFeedback(params) {
     const prompt = buildFeedbackPrompt(params);
-    const raw = await callWithFallback(prompt);
-    return parseJsonObject(raw, 'feedback');
+    const raw = await callWithFallback(prompt, { provider: params?.llmProvider || params?.llm_provider });
+    return normalizeFeedbackResult(parseJsonObject(raw, 'feedback'));
 }
 
 // ── Prompt builders ──────────────────────────────────────────────
@@ -82,13 +102,17 @@ Format:
 ]`;
 }
 
-function buildFeedbackPrompt({ code, input, languageName, question, judgeResult, score, maxScore }) {
+function buildFeedbackPrompt({ code, input, languageName, question, judgeResult, score, maxScore, testCaseResults = [] }) {
     const status = judgeResult?.status?.description || 'Unknown';
     const stdout = judgeResult?.stdout || '';
     const stderr = judgeResult?.stderr || '';
     const compileErr = judgeResult?.compile_output || '';
+    const referenceSolution = question?.reference_solution || '';
+    const testCaseBlock = Array.isArray(testCaseResults) && testCaseResults.length > 0
+        ? JSON.stringify(testCaseResults, null, 2)
+        : 'No saved testcase results were available; use the sample output context only.';
 
-    return `You are a coding tutor reviewing a student's submission. Be concise and constructive.
+    return `You are a coding tutor reviewing a student's submission. Be concise, specific, and constructive.
  
 Question: ${question.title}
 Language: ${languageName}
@@ -99,17 +123,59 @@ Expected output: ${question.sample_output || 'None'}
 ${compileErr ? `\nCompiler error:\n${compileErr}` : ''}
 ${stderr ? `\nRuntime error:\n${stderr}` : ''}
 ${stdout ? `\nOutput produced:\n${stdout}` : ''}
+
+Saved testcase results:
+${testCaseBlock}
+
+Faculty model answer code:
+${referenceSolution || 'No faculty model answer was provided.'}
  
 Student code:
 ${code}
+
+Evaluate two independent metrics:
+1. Testcase correctness: mention the exact failing testcase numbers/ids, expected output, actual output, and likely reason when results are available.
+2. Similarity Score: compare the student's algorithm, control flow, data structures, edge-case handling, and implementation style to the faculty model answer. This is NOT the correctness score. A code that passes all tests may still have a low Similarity Score if it uses a very different approach. If no faculty model answer exists, set similarity_percentage to null and explain that no comparison was possible.
+
+Similarity Score rules:
+- Return similarity_percentage as an integer from 0 to 100 when faculty model answer code exists.
+- 90-100: nearly identical approach and structure.
+- 70-89: same main algorithm with moderate implementation differences.
+- 40-69: solves similarly at a high level but differs significantly.
+- 1-39: mostly different approach.
+- 0: unrelated, empty, or not a meaningful solution.
+- Do not set similarity_percentage equal to the testcase score unless the code similarity truly supports it.
  
 Respond ONLY with this JSON object. No markdown, no explanation outside the JSON:
 {
   "summary": "One sentence verdict on the submission",
   "what_went_wrong": "Specific explanation of the error (null if the code is correct)",
   "hint": "A nudge toward the fix without giving the full answer (null if correct)",
-  "positive": "One thing the student did well in their code"
+  "positive": "One thing the student did well in their code",
+  "similarity_percentage": null,
+  "similarity_feedback": "How closely the student's approach matches the faculty model answer, or null if unavailable",
+  "testcase_feedback": "Specific testcase-based feedback, naming failed cases and why, or null if all passed"
 }`;
+}
+
+function normalizeFeedbackResult(result = {}) {
+    const normalized = { ...result };
+    const rawSimilarity = normalized.similarity_percentage ?? normalized.similarity_score ?? normalized.similarityScore;
+
+    if (rawSimilarity === null || rawSimilarity === undefined || rawSimilarity === '') {
+        normalized.similarity_percentage = null;
+    } else {
+        const parsed = Number(rawSimilarity);
+        normalized.similarity_percentage = Number.isFinite(parsed)
+            ? Math.max(0, Math.min(100, Math.round(parsed)))
+            : null;
+    }
+
+    if (normalized.similarity_feedback === undefined) {
+        normalized.similarity_feedback = null;
+    }
+
+    return normalized;
 }
 
 // ── JSON parsers ─────────────────────────────────────────────────
@@ -203,4 +269,10 @@ function stripCodeFences(text) {
         .trim();
 }
 
-module.exports = { generateTestCases, generateFeedback };
+module.exports = {
+    generateTestCases,
+    generateFeedback,
+    getProviderConfig,
+    normalizeProvider,
+    SUPPORTED_PROVIDERS
+};

@@ -11,6 +11,7 @@ const {
   getSubmissionsByCourseAndBatch,
   getMySubmissions,
   getCourseSubmissionsForFaculty,
+  getFacultySummary,
   // NEW: Add these imports
   executeCode,
   getSupportedLanguages,
@@ -40,11 +41,11 @@ router.post('/execute', studentAuth, executeCode);
 router.post('/submit', studentAuth, submitCode);
 // For production: router.post('/submit', authMiddleware, roleMiddleware('student'), submitCode);
 
-// Student polls this after submitting
-router.get('/:id/feedback', studentAuth, getSubmissionFeedback);
-
 // Student gets all their feedback
 router.get('/student/feedback', studentAuth, getAllStudentFeedback);
+
+// Student polls this after submitting
+router.get('/:id/feedback', studentAuth, getSubmissionFeedback);
 
 // Student gets their completed courses
 router.get('/completed-courses', studentAuth, getCompletedCourses);
@@ -64,6 +65,14 @@ router.get(
   authMiddleware,
   roleMiddleware('admin'),
   getSubmissionsByCourseAndBatch
+);
+
+// Faculty summary analytics
+router.get(
+  '/faculty/summary',
+  authMiddleware,
+  roleMiddleware('faculty'),
+  getFacultySummary
 );
 
 // Faculty gets submissions for a course they teach

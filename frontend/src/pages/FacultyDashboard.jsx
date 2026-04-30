@@ -4,14 +4,39 @@ import FacultyNavbar from './FacultyNavbar';
 import { useNavigate } from 'react-router-dom';
 import {
   PieChart, BookOpen, ClipboardList, MessageCircle, Search, LayoutDashboard, Download, Filter, RefreshCw,
-  TrendingUp, Users, FileText, ChevronDown, MessageSquare
+  TrendingUp, Users, FileText, ChevronDown, MessageSquare, Cpu, Server, Sparkles, CheckCircle2
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import apiClient from '../services/api';
+import { useToast } from '../context/ToastContext';
 
-const API = `${import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000'}/api`;
+const API = `${import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000'}/api`;
 
 const COLORS = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
 const PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#64748b'];
+const LLM_OPTIONS = [
+  {
+    key: 'gemini',
+    label: 'Gemini',
+    description: 'Google model for balanced test-case and feedback generation.',
+    icon: Sparkles,
+    color: '#2563eb'
+  },
+  {
+    key: 'groq',
+    label: 'Groq',
+    description: 'Low-latency hosted inference for fast review workflows.',
+    icon: Cpu,
+    color: '#dc2626'
+  },
+  {
+    key: 'local',
+    label: 'Local LLM',
+    description: 'Ollama-compatible local model for private/offline runs.',
+    icon: Server,
+    color: '#059669'
+  }
+];
 
 const readNum = (obj, ...keys) => {
   if (!obj) return 0;
@@ -216,6 +241,7 @@ const getSubmissionBadge = (submission) => {
 
 export default function FacultyDashboard() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [courses, setCourses] = useState([]);
   const [loadingCourses, setLoadingCourses] = useState(false);
   const [recentSubs, setRecentSubs] = useState([]);
@@ -225,6 +251,10 @@ export default function FacultyDashboard() {
   const [rangeFilter, setRangeFilter] = useState('7');
   const [chats, setChats] = useState([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [llmProvider, setLlmProvider] = useState('gemini');
+  const [providerRuntime, setProviderRuntime] = useState([]);
+  const [loadingProvider, setLoadingProvider] = useState(false);
+  const [savingProvider, setSavingProvider] = useState('');
 
   const token = useMemo(() => localStorage.getItem('token') || null, []);
   const headers = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
@@ -232,6 +262,7 @@ export default function FacultyDashboard() {
   useEffect(() => {
     fetchCourses();
     fetchSummary();
+    fetchLlmProvider();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -349,6 +380,45 @@ export default function FacultyDashboard() {
       setChats([]);
     }
   }
+
+  async function fetchLlmProvider() {
+    setLoadingProvider(true);
+    try {
+      const res = await apiClient.get('/v1/users/me/llm-provider');
+      const payload = res.data?.data || {};
+      setLlmProvider(payload.selectedProvider || 'gemini');
+      setProviderRuntime(Array.isArray(payload.runtime?.providers) ? payload.runtime.providers : []);
+    } catch (err) {
+      console.warn('fetchLlmProvider failed', err?.response?.data || err.message);
+    } finally {
+      setLoadingProvider(false);
+    }
+  }
+
+  async function updateLlmProvider(provider) {
+    if (!provider || provider === llmProvider || savingProvider) return;
+
+    const previous = llmProvider;
+    setLlmProvider(provider);
+    setSavingProvider(provider);
+    try {
+      const res = await apiClient.put('/v1/users/me/llm-provider', { provider });
+      const payload = res.data?.data || {};
+      setLlmProvider(payload.selectedProvider || provider);
+      setProviderRuntime(Array.isArray(payload.runtime?.providers) ? payload.runtime.providers : providerRuntime);
+      toast?.success?.(`${LLM_OPTIONS.find((item) => item.key === provider)?.label || 'LLM provider'} selected`);
+    } catch (err) {
+      setLlmProvider(previous);
+      toast?.error?.(err?.response?.data?.message || 'Unable to update LLM provider');
+    } finally {
+      setSavingProvider('');
+    }
+  }
+
+  const providerConfigured = (provider) => {
+    const item = providerRuntime.find((entry) => entry.name === provider);
+    return item ? item.configured !== false : true;
+  };
 
   const totalCourses = courses.length;
   const totalStudents = courses.reduce((s, c) => s + readNum(c, 'studentCount', 'count', 'students'), 0);
@@ -605,6 +675,65 @@ export default function FacultyDashboard() {
 
             {/* Right Column: Messages & Quick Actions */}
             <div className="lg:col-span-1 space-y-6">
+              <div className="lms-card p-6">
+                <div className="flex items-center justify-between gap-3 mb-5">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-indigo-100 text-indigo-600">
+                      <Cpu size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-800">AI Provider</h3>
+                      <p className="text-xs text-slate-500 font-bold">Used for test cases and feedback</p>
+                    </div>
+                  </div>
+                  {loadingProvider && <RefreshCw size={16} className="text-slate-400 animate-spin" />}
+                </div>
+
+                <div className="space-y-3">
+                  {LLM_OPTIONS.map((option) => {
+                    const Icon = option.icon;
+                    const selected = llmProvider === option.key;
+                    const configured = providerConfigured(option.key);
+
+                    return (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => updateLlmProvider(option.key)}
+                        disabled={loadingProvider || Boolean(savingProvider)}
+                        className={`w-full text-left p-3 rounded-xl border transition-all ${
+                          selected
+                            ? 'border-indigo-300 bg-indigo-50 shadow-sm'
+                            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                        } disabled:opacity-70 disabled:cursor-not-allowed`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div
+                            className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 bg-white border border-slate-200"
+                            style={{ color: option.color }}
+                          >
+                            <Icon size={19} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-slate-800">{option.label}</span>
+                              {selected && <CheckCircle2 size={15} className="text-indigo-600" />}
+                              {savingProvider === option.key && <RefreshCw size={13} className="text-slate-400 animate-spin" />}
+                            </div>
+                            <p className="text-xs text-slate-500 mt-1 leading-relaxed">{option.description}</p>
+                            <span className={`inline-flex mt-2 px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                              configured ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                            }`}>
+                              {configured ? 'Configured' : 'Needs backend key'}
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Messages */}
               <div className="lms-card p-6 flex flex-col h-[500px]">
               <div className="flex items-center gap-3 mb-4">

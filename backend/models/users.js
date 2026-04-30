@@ -37,6 +37,11 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.ENUM('super_admin', 'admin', 'faculty', 'candidate'),
       defaultValue: 'admin'
     },
+    llm_provider: {
+      type: DataTypes.ENUM('gemini', 'groq', 'local'),
+      allowNull: false,
+      defaultValue: 'gemini'
+    },
     is_active: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,

@@ -1,5 +1,12 @@
 const express = require('express');
-const { login , changePassword , getMe, updateMe } = require('../controllers/userController');
+const {
+  login,
+  changePassword,
+  getMe,
+  updateMe,
+  getMyLlmProvider,
+  updateMyLlmProvider
+} = require('../controllers/userController');
 const facultyController = require('../controllers/facultyController');
 const { facultyAuth } = require('../Middleware/authmiddleware');
 
@@ -189,5 +196,8 @@ router.get('/me', authMiddleware, getMe);
 
 // UPDATE current user
 router.put('/me', authMiddleware, updateMe);
+
+router.get('/me/llm-provider', authMiddleware, roleMiddleware('faculty'), getMyLlmProvider);
+router.put('/me/llm-provider', authMiddleware, roleMiddleware('faculty'), updateMyLlmProvider);
 
 module.exports = router;

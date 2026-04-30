@@ -171,7 +171,7 @@ if (db.User && db.CourseMessage) {
  * Use { alter: true } to update existing tables with new columns.
  * Use { force: true } only for development to drop and recreate tables (destructive).
  */
-db.syncDatabase = async (options = { alter: true, force: false }) => {
+db.syncDatabase = async (options = { alter: false, force: false }) => {
   try {
     console.info('[DB Sync] Starting database synchronization...');
     await sequelize.sync(options);

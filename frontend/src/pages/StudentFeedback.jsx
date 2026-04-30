@@ -16,9 +16,17 @@ const API_ORIGIN =
 const API_FEEDBACK = `${API_ORIGIN}/api/submissions/student/feedback`;
 
 const normalizeFeedbackList = (payload) => {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.feedback)) return payload.feedback;
-  if (Array.isArray(payload?.data)) return payload.data;
+  const list = Array.isArray(payload) ? payload
+    : Array.isArray(payload?.feedback) ? payload.feedback
+      : Array.isArray(payload?.data) ? payload.data
+        : null;
+
+  if (list) {
+    return list
+      .map((item) => item?.dataValues ? { ...item.dataValues, ...item } : item)
+      .filter((item) => item && item.status !== 'pending');
+  }
+
   if (!payload || typeof payload !== 'object') return [];
 
   const keys = Object.keys(payload);
@@ -31,7 +39,7 @@ const normalizeFeedbackList = (payload) => {
   }
 
   if (keys.length > 0) {
-    return [payload];
+    return [payload?.dataValues ? { ...payload.dataValues, ...payload } : payload];
   }
   return [];
 };
@@ -168,6 +176,28 @@ export default function StudentFeedback() {
                         What went wrong
                       </h4>
                       <p className="text-slate-600 bg-red-50 rounded-lg p-3 border-l-4 border-red-200">{item.what_went_wrong}</p>
+                    </div>
+                  )}
+
+                  {item.similarity_percentage !== null && item.similarity_percentage !== undefined && (
+                    <div>
+                      <h4 className="font-semibold text-slate-700 mb-2 flex items-center gap-2">
+                        <CheckCircle size={16} className="text-indigo-600" />
+                        Similarity Score
+                      </h4>
+                      <p className="text-slate-600 bg-indigo-50 rounded-lg p-3 border-l-4 border-indigo-200">
+                        {item.similarity_percentage}% match. {item.similarity_feedback}
+                      </p>
+                    </div>
+                  )}
+
+                  {item.testcase_feedback && (
+                    <div>
+                      <h4 className="font-semibold text-slate-700 mb-2 flex items-center gap-2">
+                        <AlertCircle size={16} className="text-orange-600" />
+                        Testcase feedback
+                      </h4>
+                      <p className="text-slate-600 bg-orange-50 rounded-lg p-3 border-l-4 border-orange-200">{item.testcase_feedback}</p>
                     </div>
                   )}
 
