@@ -4,8 +4,8 @@ import axios from 'axios';
 import { ArrowLeft, Mail, Lock, Eye, EyeOff, Send, RefreshCw } from 'lucide-react';
 import AuthShell from '../components/AuthShell';
 
-const API_BASE = 'http://localhost:5000/api';
-
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000';
+const API_BASE = `${API_ORIGIN}/api`;
 export default function ForgotPassword() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -30,8 +30,6 @@ export default function ForgotPassword() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [devOtp, setDevOtp] = useState('');
-
   const requestOTP = async (e) => {
     e.preventDefault();
     setError('');
@@ -40,8 +38,7 @@ export default function ForgotPassword() {
     try {
       const response = await axios.post(`${API_BASE}/password-reset/request-otp`, { email, userType });
       if (response.data.success) {
-        setSuccess('OTP sent to your email.');
-        if (isDev && response.data.dev_otp) setDevOtp(response.data.dev_otp);
+        setSuccess(response.data.message || 'OTP sent.');
         setTimeout(() => {
           setStep(2);
           setSuccess('');
@@ -113,8 +110,7 @@ export default function ForgotPassword() {
     try {
       const response = await axios.post(`${API_BASE}/password-reset/resend-otp`, { email, userType });
       if (response.data.success) {
-        setSuccess('OTP resent.');
-        if (isDev && response.data.dev_otp) setDevOtp(response.data.dev_otp);
+        setSuccess(response.data.message || 'OTP resent.');
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to resend OTP');
@@ -136,13 +132,6 @@ export default function ForgotPassword() {
 
       {error && <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm">{error}</div>}
       {success && <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm">{success}</div>}
-      {isDev && devOtp && (
-        <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200">
-          <p className="text-xs font-semibold text-amber-800">Development OTP</p>
-          <p className="text-xl font-black text-amber-900 tracking-widest">{devOtp}</p>
-        </div>
-      )}
-
       {step === 1 && (
         <form onSubmit={requestOTP} className="space-y-4">
           <div>
@@ -243,4 +232,3 @@ export default function ForgotPassword() {
     </AuthShell>
   );
 }
-  const isDev = import.meta.env.DEV;

@@ -28,6 +28,33 @@ const ensureApplicationSchema = async (sequelize, logger = console) => {
     `);
     logger.info('[DB Schema] Added users.llm_provider column.');
   }
+
+  const submissionFeedbacksHasSimilarityPercentage = await hasColumn(sequelize, 'submissionfeedbacks', 'similarity_percentage');
+  if (!submissionFeedbacksHasSimilarityPercentage) {
+    await sequelize.query(`
+      ALTER TABLE submissionfeedbacks
+      ADD COLUMN similarity_percentage INT NULL
+    `);
+    logger.info('[DB Schema] Added submissionfeedbacks.similarity_percentage column.');
+  }
+
+  const submissionFeedbacksHasSimilarityFeedback = await hasColumn(sequelize, 'submissionfeedbacks', 'similarity_feedback');
+  if (!submissionFeedbacksHasSimilarityFeedback) {
+    await sequelize.query(`
+      ALTER TABLE submissionfeedbacks
+      ADD COLUMN similarity_feedback TEXT NULL
+    `);
+    logger.info('[DB Schema] Added submissionfeedbacks.similarity_feedback column.');
+  }
+
+  const submissionFeedbacksHasTestcaseFeedback = await hasColumn(sequelize, 'submissionfeedbacks', 'testcase_feedback');
+  if (!submissionFeedbacksHasTestcaseFeedback) {
+    await sequelize.query(`
+      ALTER TABLE submissionfeedbacks
+      ADD COLUMN testcase_feedback TEXT NULL
+    `);
+    logger.info('[DB Schema] Added submissionfeedbacks.testcase_feedback column.');
+  }
 };
 
 module.exports = {

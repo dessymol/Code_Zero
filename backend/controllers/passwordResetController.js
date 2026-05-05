@@ -1,21 +1,30 @@
-// backend/controllers/passwordResetController.js
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { User, Student } = require('../models');
+const { sendMail } = require('../utils/mailer');
 
-/**
- * Generate a 6-digit OTP
- */
-const generateOTP = () => {
-    return crypto.randomInt(100000, 999999).toString();
+const isPlaceholderValue = (value) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) return true;
+
+    return (
+        normalized.includes('your_email') ||
+        normalized.includes('your-real-gmail') ||
+        normalized.includes('your_app_password') ||
+        normalized.includes('app-password') ||
+        normalized.includes('example.com') ||
+        normalized === 'changeme'
+    );
 };
 
-/**
- * Send OTP via email (mock implementation - replace with actual email service)
- * You can integrate with services like SendGrid, AWS SES, Nodemailer, etc.
- */
+const hasUsableEmailConfig = () => (
+    !isPlaceholderValue(process.env.EMAIL_USER) &&
+    !isPlaceholderValue(process.env.EMAIL_PASS)
+);
+
+const generateOTP = () => crypto.randomInt(100000, 999999).toString();
+
 const sendOTPEmail = async (email, otp, userType) => {
-    // Log OTP for dev/debugging
     console.log(`
     ========================================
     PASSWORD RESET OTP (Log)
@@ -26,57 +35,71 @@ const sendOTPEmail = async (email, otp, userType) => {
     ========================================
     `);
 
-    // Use Nodemailer if credentials are provided
-    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-        try {
-            const nodemailer = require('nodemailer');
-            const transporter = nodemailer.createTransport({
-                service: 'gmail',
-                auth: {
-                    user: process.env.EMAIL_USER,
-                    pass: process.env.EMAIL_PASS
-                }
-            });
-
-            await transporter.sendMail({
-                from: process.env.EMAIL_USER,
-                to: email,
-                subject: 'Password Reset OTP - CodeZero',
-                html: `
-                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
-                        <h2 style="color: #4f46e5;">Password Reset Request</h2>
-                        <p>Hello,</p>
-                        <p>You requested to reset your password for your <strong>${userType}</strong> account.</p>
-                        <p>Please use the following One-Time Password (OTP) to proceed:</p>
-                        <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; text-align: center; margin: 20px 0;">
-                            <span style="color: #4f46e5; font-size: 28px; letter-spacing: 5px; font-weight: bold;">${otp}</span>
-                        </div>
-                        <p>This OTP is valid for <strong>10 minutes</strong>.</p>
-                        <p style="font-size: 0.9em; color: #666;">If you did not request this, please ignore this email.</p>
-                        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-                        <p style="font-size: 0.8em; color: #888;">CodeZero Team</p>
-                    </div>
-                `
-            });
-            console.log('✅ Email sent successfully to ' + email);
-        } catch (emailErr) {
-            console.error('❌ Failed to send email:', emailErr);
-            // Don't throw, so the API still succeeds (OTP is still in DB/Logs)
-        }
-    } else {
-        console.log('⚠️ Email credentials not found in .env. Email was NOT sent. Check console logs for OTP.');
+    if (!hasUsableEmailConfig()) {
+        const message = 'Email credentials are missing or still set to placeholder values in backend/.env.';
+        console.warn(message);
+        return { delivered: false, fallback: message };
     }
 
-    return true;
+    try {
+        await sendMail({
+            to: email,
+            subject: 'Password Reset OTP - CodeZero',
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+                    <h2 style="color: #4f46e5;">Password Reset Request</h2>
+                    <p>Hello,</p>
+                    <p>You requested to reset your password for your <strong>${userType}</strong> account.</p>
+                    <p>Please use the following One-Time Password (OTP) to proceed:</p>
+                    <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; text-align: center; margin: 20px 0;">
+                        <span style="color: #4f46e5; font-size: 28px; letter-spacing: 5px; font-weight: bold;">${otp}</span>
+                    </div>
+                    <p>This OTP is valid for <strong>10 minutes</strong>.</p>
+                    <p style="font-size: 0.9em; color: #666;">If you did not request this, please ignore this email.</p>
+                    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+                    <p style="font-size: 0.8em; color: #888;">CodeZero Team</p>
+                </div>
+            `
+        });
+
+        console.log(`Email sent successfully to ${email}`);
+        return { delivered: true, fallback: null };
+    } catch (error) {
+        console.error('Failed to send OTP email:', error);
+        return {
+            delivered: false,
+            fallback: error.message || 'Failed to send OTP email'
+        };
+    }
 };
 
-/**
- * Request OTP for password reset
- * Works for Admin, Faculty (User model) and Student
- */
+const findUserByType = async (email, userType, withPassword = false) => {
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    const normalizedType = String(userType || '').trim().toLowerCase();
+
+    if (normalizedType === 'student') {
+        return Student.findOne({ where: { email: normalizedEmail } });
+    }
+
+    const query = withPassword
+        ? User.scope('withPassword')
+        : User;
+
+    const user = await query.findOne({
+        where: { email: normalizedEmail },
+        ...(withPassword ? {} : { attributes: { include: ['reset_otp', 'reset_otp_expires'] } })
+    });
+
+    if (!user) return null;
+    if (normalizedType === 'admin' && user.role !== 'admin') return null;
+    if (normalizedType === 'faculty' && user.role !== 'faculty') return null;
+
+    return user;
+};
+
 exports.requestOTP = async (req, res) => {
     try {
-        const { email, userType } = req.body;
+        const { email, userType } = req.body || {};
 
         if (!email || !userType) {
             return res.status(400).json({
@@ -85,77 +108,49 @@ exports.requestOTP = async (req, res) => {
             });
         }
 
-        // Validate userType
-        if (!['admin', 'faculty', 'student'].includes(userType.toLowerCase())) {
+        const normalizedType = String(userType).toLowerCase();
+        if (!['admin', 'faculty', 'student'].includes(normalizedType)) {
             return res.status(400).json({
                 success: false,
                 message: 'Invalid user type'
             });
         }
 
-        let user;
-        const normalizedType = userType.toLowerCase();
-
-        // Find user based on type
-        if (normalizedType === 'student') {
-            user = await Student.findOne({ where: { email } });
-        } else {
-            // Admin and Faculty are in User model
-            user = await User.findOne({
-                where: { email },
-                attributes: { include: ['password'] } // Include password field
-            });
-
-            // Verify role matches
-            if (user && normalizedType === 'admin' && user.role !== 'admin') {
-                user = null;
-            } else if (user && normalizedType === 'faculty' && user.role !== 'faculty') {
-                user = null;
-            }
-        }
+        const normalizedEmail = String(email).trim().toLowerCase();
+        const user = await findUserByType(normalizedEmail, normalizedType, true);
 
         if (!user) {
-            // For security, don't reveal if email exists
             return res.status(200).json({
                 success: true,
                 message: 'If the email exists, an OTP has been sent'
             });
         }
 
-        // Generate OTP
         const otp = generateOTP();
-        const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-        // Save OTP to database
         user.reset_otp = otp;
-        user.reset_otp_expires = otpExpires;
+        user.reset_otp_expires = new Date(Date.now() + 10 * 60 * 1000);
         await user.save();
 
-        // Send OTP via email
-        await sendOTPEmail(email, otp, normalizedType);
+        const emailResult = await sendOTPEmail(normalizedEmail, otp, normalizedType);
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
-            message: 'OTP sent to your email address',
-            // For development only - remove in production:
-            dev_otp: process.env.NODE_ENV === 'development' ? otp : undefined
+            message: emailResult.delivered
+                ? 'OTP sent to your email address'
+                : 'OTP generated, but email delivery failed. Check backend email settings or server logs.'
         });
-
     } catch (error) {
         console.error('Request OTP error:', error);
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
-            message: 'Failed to send OTP. Please try again.'
+            message: error.message || 'Failed to send OTP. Please try again.'
         });
     }
 };
 
-/**
- * Verify OTP
- */
 exports.verifyOTP = async (req, res) => {
     try {
-        const { email, otp, userType } = req.body;
+        const { email, otp, userType } = req.body || {};
 
         if (!email || !otp || !userType) {
             return res.status(400).json({
@@ -164,19 +159,7 @@ exports.verifyOTP = async (req, res) => {
             });
         }
 
-        let user;
-        const normalizedType = userType.toLowerCase();
-
-        // Find user
-        if (normalizedType === 'student') {
-            user = await Student.findOne({ where: { email } });
-        } else {
-            user = await User.findOne({
-                where: { email },
-                attributes: { include: ['password', 'reset_otp', 'reset_otp_expires'] }
-            });
-        }
-
+        const user = await findUserByType(email, userType, false);
         if (!user) {
             return res.status(400).json({
                 success: false,
@@ -184,7 +167,6 @@ exports.verifyOTP = async (req, res) => {
             });
         }
 
-        // Check if OTP exists and is not expired
         if (!user.reset_otp || !user.reset_otp_expires) {
             return res.status(400).json({
                 success: false,
@@ -199,34 +181,29 @@ exports.verifyOTP = async (req, res) => {
             });
         }
 
-        // Verify OTP
-        if (user.reset_otp !== otp) {
+        if (String(user.reset_otp) !== String(otp)) {
             return res.status(400).json({
                 success: false,
                 message: 'Invalid OTP'
             });
         }
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             message: 'OTP verified successfully'
         });
-
     } catch (error) {
         console.error('Verify OTP error:', error);
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
             message: 'Failed to verify OTP'
         });
     }
 };
 
-/**
- * Reset password using OTP
- */
 exports.resetPassword = async (req, res) => {
     try {
-        const { email, otp, newPassword, userType } = req.body;
+        const { email, otp, newPassword, userType } = req.body || {};
 
         if (!email || !otp || !newPassword || !userType) {
             return res.status(400).json({
@@ -235,7 +212,6 @@ exports.resetPassword = async (req, res) => {
             });
         }
 
-        // Validate password strength
         if (newPassword.length < 6) {
             return res.status(400).json({
                 success: false,
@@ -243,16 +219,7 @@ exports.resetPassword = async (req, res) => {
             });
         }
 
-        let user;
-        const normalizedType = userType.toLowerCase();
-
-        // Find user
-        if (normalizedType === 'student') {
-            user = await Student.findOne({ where: { email } });
-        } else {
-            user = await User.scope('withPassword').findOne({ where: { email } });
-        }
-
+        const user = await findUserByType(email, userType, true);
         if (!user) {
             return res.status(400).json({
                 success: false,
@@ -260,7 +227,6 @@ exports.resetPassword = async (req, res) => {
             });
         }
 
-        // Verify OTP again
         if (!user.reset_otp || !user.reset_otp_expires) {
             return res.status(400).json({
                 success: false,
@@ -275,58 +241,29 @@ exports.resetPassword = async (req, res) => {
             });
         }
 
-        if (user.reset_otp !== otp) {
+        if (String(user.reset_otp) !== String(otp)) {
             return res.status(400).json({
                 success: false,
                 message: 'Invalid OTP'
             });
         }
 
-        // Hash new password
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-        // Update password and clear OTP
-        user.password = hashedPassword;
+        user.password = await bcrypt.hash(newPassword, 10);
         user.reset_otp = null;
         user.reset_otp_expires = null;
         await user.save();
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             message: 'Password reset successfully. You can now login with your new password.'
         });
-
     } catch (error) {
         console.error('Reset password error:', error);
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
             message: 'Failed to reset password'
         });
     }
 };
 
-/**
- * Resend OTP (with rate limiting recommended)
- */
-exports.resendOTP = async (req, res) => {
-    try {
-        const { email, userType } = req.body;
-
-        if (!email || !userType) {
-            return res.status(400).json({
-                success: false,
-                message: 'Email and user type are required'
-            });
-        }
-
-        // Reuse the requestOTP logic
-        return exports.requestOTP(req, res);
-
-    } catch (error) {
-        console.error('Resend OTP error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to resend OTP'
-        });
-    }
-};
+exports.resendOTP = async (req, res) => exports.requestOTP(req, res);

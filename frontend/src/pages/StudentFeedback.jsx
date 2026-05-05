@@ -11,7 +11,7 @@ const API_ORIGIN =
   import.meta.env.VITE_BACKEND_URL ||
   (import.meta.env.VITE_API_URL
     ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '')
-    : 'http://localhost:5000');
+    : 'http://localhost:3000');
 
 const API_FEEDBACK = `${API_ORIGIN}/api/submissions/student/feedback`;
 

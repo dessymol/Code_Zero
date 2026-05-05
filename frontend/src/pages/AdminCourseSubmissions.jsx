@@ -8,7 +8,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import AdminLayout from "./AdminLayout";
 
-const API_ROOT = "http://localhost:5000/api";
+const API_ROOT = "http://localhost:3000/api";
 const EXPORT_ROOT = `${API_ROOT}/export`;
 
 // --- Components ---

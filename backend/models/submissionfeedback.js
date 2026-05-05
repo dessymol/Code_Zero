@@ -33,6 +33,6 @@ module.exports = (sequelize, DataTypes) => {
         }
     }, {
         timestamps: true,
-        tableName: 'SubmissionFeedbacks'
+        tableName: 'submissionfeedbacks'
     });
 };

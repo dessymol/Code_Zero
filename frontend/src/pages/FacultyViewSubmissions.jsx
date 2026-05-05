@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import FacultyNavbar from './FacultyNavbar';
 import { motion } from 'framer-motion';
 
-const API = 'http://localhost:5000/api';
+const API = 'http://localhost:3000/api';
 const COLORS = ['#7c3aed','#2563eb','#059669','#d97706','#dc2626','#0891b2','#4f46e5','#db2777'];
 
 export default function FacultyViewSubmissions() {

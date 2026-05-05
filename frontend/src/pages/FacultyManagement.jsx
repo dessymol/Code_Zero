@@ -4,7 +4,7 @@ import AdminLayout from './AdminLayout';
 import axios from 'axios';
 import { useToast } from '../context/ToastContext';
 
-const API_BASE = 'http://localhost:5000/api/v1/users';
+const API_BASE = 'http://localhost:3000/api/v1/users';
 
 const Modal = ({ isOpen, onClose, title, children, maxWidth = 'max-w-md' }) => {
   if (!isOpen) return null;

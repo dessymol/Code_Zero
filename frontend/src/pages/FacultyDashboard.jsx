@@ -10,7 +10,7 @@ import { motion } from 'framer-motion';
 import apiClient from '../services/api';
 import { useToast } from '../context/ToastContext';
 
-const API = `${import.meta.env.VITE_API_ORIGIN || 'http://localhost:5000'}/api`;
+const API = `${import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000'}/api`;
 
 const COLORS = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
 const PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#64748b'];
