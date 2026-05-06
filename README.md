@@ -540,6 +540,6 @@ These are open items documented during development — useful context for any ne
 
 ## Authors
 
-Alishia · Anusree · Dessymol · Gowri · Prince
+Alishia  · Dessymol · Gowri · Prince
 
 Built for ICTAK (ICT Academy of Kerala) — CodeZero LMS
