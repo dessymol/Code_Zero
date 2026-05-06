@@ -19,7 +19,9 @@ const {
   approveSubmission,
   overrideScore,
   getExamViolationStatus,
-  recordExamViolation
+  recordExamViolation,
+  getStudentViolationsForFaculty,
+  resetStudentViolations
 } = require('../controllers/submissionController');
 const { studentAuth, facultyAuth, adminAuth, authMiddleware, roleMiddleware } = require('../Middleware/authmiddleware');
 // ========================
@@ -87,5 +89,7 @@ router.patch('/:id/approve', authMiddleware, roleMiddleware('faculty'), approveS
 router.get('/mine', studentAuth, getMySubmissions);
 router.get('/exam-status/:courseId', studentAuth, getExamViolationStatus);
 router.post('/exam-violations/:courseId', studentAuth, recordExamViolation);
+router.get('/faculty/violations', facultyAuth, getStudentViolationsForFaculty);
+router.post('/faculty/reset-violations/:studentId/:courseId', facultyAuth, resetStudentViolations);
 router.patch('/:id/score', authMiddleware, roleMiddleware('faculty'), overrideScore);
 module.exports = router;

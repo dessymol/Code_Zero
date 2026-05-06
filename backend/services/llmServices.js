@@ -75,7 +75,8 @@ async function generateTestCases(question, count = 5) {
 async function generateFeedback(params) {
     const prompt = buildFeedbackPrompt(params);
     const raw = await callWithFallback(prompt, { provider: params?.llmProvider || params?.llm_provider });
-    return normalizeFeedbackResult(parseJsonObject(raw, 'feedback'));
+    const normalized = normalizeFeedbackResult(parseJsonObject(raw, 'feedback'));
+    return applySimilarityFallback(normalized, params);
 }
 
 // ── Prompt builders ──────────────────────────────────────────────
@@ -176,6 +177,79 @@ function normalizeFeedbackResult(result = {}) {
     }
 
     return normalized;
+}
+
+function applySimilarityFallback(result = {}, params = {}) {
+    const normalized = { ...result };
+    const referenceSolution = String(params?.question?.reference_solution || '').trim();
+    const studentCode = String(params?.code || '').trim();
+
+    if (!referenceSolution || normalized.similarity_percentage != null) {
+        return normalized;
+    }
+
+    const similarity = computeCodeSimilarity(referenceSolution, studentCode);
+    normalized.similarity_percentage = similarity;
+
+    if (!normalized.similarity_feedback) {
+        normalized.similarity_feedback =
+            similarity >= 95
+                ? 'The student submission is nearly identical to the faculty model answer.'
+                : similarity >= 75
+                    ? 'The student submission is very close to the faculty model answer with minor differences.'
+                    : similarity >= 50
+                        ? 'The student submission follows the faculty model answer in part, with noticeable differences.'
+                        : 'The student submission differs significantly from the faculty model answer.';
+    }
+
+    return normalized;
+}
+
+function computeCodeSimilarity(referenceSolution, studentCode) {
+    const left = normalizeCode(referenceSolution);
+    const right = normalizeCode(studentCode);
+
+    if (!left || !right) return 0;
+    if (left === right) return 100;
+
+    const leftLines = left.split('\n').filter(Boolean);
+    const rightLines = right.split('\n').filter(Boolean);
+    const leftSet = new Set(leftLines);
+    const rightSet = new Set(rightLines);
+    const intersection = [...leftSet].filter((line) => rightSet.has(line)).length;
+    const union = new Set([...leftSet, ...rightSet]).size || 1;
+    const lineSimilarity = intersection / union;
+
+    const leftTokens = tokenizeCode(left);
+    const rightTokens = tokenizeCode(right);
+    const tokenSimilarity = jaccardSimilarity(leftTokens, rightTokens);
+
+    return Math.max(0, Math.min(100, Math.round(((lineSimilarity * 0.45) + (tokenSimilarity * 0.55)) * 100)));
+}
+
+function normalizeCode(code) {
+    return String(code || '')
+        .replace(/\r\n/g, '\n')
+        .replace(/[ \t]+/g, ' ')
+        .replace(/\n{2,}/g, '\n')
+        .trim();
+}
+
+function tokenizeCode(code) {
+    return new Set(
+        String(code || '')
+            .toLowerCase()
+            .split(/[^a-z0-9_]+/i)
+            .map((token) => token.trim())
+            .filter(Boolean)
+    );
+}
+
+function jaccardSimilarity(leftSet, rightSet) {
+    const union = new Set([...leftSet, ...rightSet]);
+    if (union.size === 0) return 0;
+    const intersection = [...leftSet].filter((token) => rightSet.has(token)).length;
+    return intersection / union.size;
 }
 
 // ── JSON parsers ─────────────────────────────────────────────────

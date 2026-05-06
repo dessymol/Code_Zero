@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { clearSession, setSession } from '../utils/auth';
 import AuthShell from '../components/AuthShell';
 
@@ -13,6 +13,7 @@ const AdminLogin = () => {
   const [error, setError] = useState('');
 
   const navigate = useNavigate();
+  const location = useLocation();
   const API_USER_LOGIN = `${API_ORIGIN}/api/v1/users/login`;
   const API_STUDENT_LOGIN = `${API_ORIGIN}/api/students/login`;
 
@@ -31,6 +32,25 @@ const AdminLogin = () => {
     return status === 401 || status === 404;
   };
 
+  const isStudentRoute = location.pathname === '/student/login';
+  const isFacultyRoute = location.pathname === '/faculty/login';
+
+  const loginThroughUserApi = async (payload) => {
+    const response = await axios.post(API_USER_LOGIN, payload);
+    return {
+      token: response?.data?.token,
+      user: response?.data?.user,
+    };
+  };
+
+  const loginThroughStudentApi = async (payload) => {
+    const response = await axios.post(API_STUDENT_LOGIN, payload);
+    return {
+      token: response?.data?.token,
+      user: response?.data?.user,
+    };
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -42,17 +62,19 @@ const AdminLogin = () => {
       let token = null;
       let user = null;
 
-      try {
-        const response = await axios.post(API_USER_LOGIN, payload);
-        token = response?.data?.token;
-        user = response?.data?.user;
-      } catch (userErr) {
-        if (!shouldTryStudentLogin(userErr)) {
-          throw userErr;
+      if (isStudentRoute) {
+        ({ token, user } = await loginThroughStudentApi(payload));
+      } else if (isFacultyRoute) {
+        ({ token, user } = await loginThroughUserApi(payload));
+      } else {
+        try {
+          ({ token, user } = await loginThroughUserApi(payload));
+        } catch (userErr) {
+          if (!shouldTryStudentLogin(userErr)) {
+            throw userErr;
+          }
+          ({ token, user } = await loginThroughStudentApi(payload));
         }
-        const studentResponse = await axios.post(API_STUDENT_LOGIN, payload);
-        token = studentResponse?.data?.token;
-        user = studentResponse?.data?.user;
       }
 
       const role = normalizeRole(user?.role);

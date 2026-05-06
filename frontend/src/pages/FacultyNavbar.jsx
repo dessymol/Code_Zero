@@ -1,7 +1,7 @@
 // src/pages/FacultyNavbar.jsx
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ChevronDown, LayoutDashboard, BookOpen, ClipboardList, BarChart2, MessageSquare, User, LogOut, Zap } from 'lucide-react';
+import { ChevronDown, LayoutDashboard, BookOpen, ClipboardList, BarChart2, MessageSquare, User, LogOut, Zap, AlertTriangle } from 'lucide-react';
 import axios from 'axios';
 import { clearSession } from '../utils/auth';
 
@@ -10,6 +10,7 @@ const navItems = [
   { label: 'Courses', path: '/faculty/view-courses', icon: BookOpen },
   { label: 'Chats', path: '/faculty/chats', icon: MessageSquare },
   { label: 'Submissions', path: '/faculty/view-submissions', icon: ClipboardList },
+  { label: 'Violations', path: '/faculty/violations', icon: AlertTriangle },
   { label: 'Reports', path: '/faculty/reports', icon: BarChart2 },
 ];
 

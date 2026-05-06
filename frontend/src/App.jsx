@@ -23,6 +23,7 @@ const ManageQuestions = lazy(() => import('./pages/ManageQuestions'));
 const FacultyChatView = lazy(() => import('./pages/FacultyChatView'));
 const FacultyReports = lazy(() => import('./pages/FacultyReports'));
 const FacultyViewSubmissions = lazy(() => import('./pages/FacultyViewSubmissions'));
+const FacultyViolations = lazy(() => import('./pages/FacultyViolations'));
 const FacultyProfile = lazy(() => import('./pages/FacultyProfile'));
 const StudentDashboard = lazy(() => import('./pages/StudentDashboard'));
 const StudentProfile = lazy(() => import('./pages/StudentProfile'));
@@ -118,6 +119,7 @@ function App() {
           <Route path="/faculty/course/:courseId/chat" element={<ProtectedRoute roles={['faculty']}><FacultyChatView /></ProtectedRoute>} />
           <Route path="/faculty/reports" element={<ProtectedRoute roles={['faculty']}><FacultyReports /></ProtectedRoute>} />
           <Route path="/faculty/view-submissions" element={<ProtectedRoute roles={['faculty']}><FacultyViewSubmissions /></ProtectedRoute>} />
+          <Route path="/faculty/violations" element={<ProtectedRoute roles={['faculty']}><FacultyViolations /></ProtectedRoute>} />
           <Route path="/faculty/profile" element={<ProtectedRoute roles={['faculty']}><FacultyProfile /></ProtectedRoute>} />
 
           {/* Student Routes */}

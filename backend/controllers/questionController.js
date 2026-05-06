@@ -265,7 +265,7 @@ exports.getQuestionBankForCourse = async (req, res) => {
         question_id: { [Op.in]: questionIds },
         enabled: true
       },
-      attributes: ['id', 'question_id', 'batch_id', 'enabled', 'toggled_by', 'toggled_at'],
+      attributes: ['id', 'question_id', 'batch_id', 'enabled', 'activation_version', 'toggled_by', 'toggled_at'],
       include: [includeEntry]
     });
 
@@ -286,6 +286,7 @@ exports.getQuestionBankForCourse = async (req, res) => {
 
       map[qid][qb.batch_id] = {
         enabled: qb.enabled,
+        activation_version: Number(qb.activation_version) || 1,
         toggled_by: qb.toggled_by,
         toggled_at: qb.toggled_at,
         id: qb.id,
@@ -394,6 +395,7 @@ exports.toggleQuestionForBatch = async (req, res) => {
       where: { question_id: questionId, batch_id: batchId },
       defaults: {
         enabled: (enabledFromBody !== undefined) ? enabledFromBody : true,
+        activation_version: (enabledFromBody !== undefined ? enabledFromBody : true) ? 1 : 0,
         toggled_by: userId || null,
         toggled_at: new Date()
       },
@@ -401,11 +403,15 @@ exports.toggleQuestionForBatch = async (req, res) => {
     });
 
     if (!created) {
+      const wasEnabled = Boolean(qb.enabled);
       // If enabled specified in body, use it; otherwise toggle
       if (enabledFromBody !== undefined) {
         qb.enabled = enabledFromBody;
       } else {
         qb.enabled = !qb.enabled;
+      }
+      if (!wasEnabled && qb.enabled) {
+        qb.activation_version = Math.max(0, Number(qb.activation_version) || 0) + 1;
       }
       qb.toggled_by = userId || qb.toggled_by;
       qb.toggled_at = new Date();

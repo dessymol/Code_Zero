@@ -1,7 +1,7 @@
 // src/pages/CodingPage.jsx
 import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useBeforeUnload, useNavigate, useParams } from 'react-router-dom';
 
 const RAPIDAPI_KEY = import.meta.env.VITE_RAPIDAPI_KEY || null;
 const RAPIDAPI_HOST = import.meta.env.VITE_RAPIDAPI_HOST || 'judge0-ce.p.rapidapi.com';
@@ -163,9 +163,12 @@ const CodingPage = () => {
   const [showWarning, setShowWarning] = useState(false);
   const [violationLimit, setViolationLimit] = useState(3);
   const [showFinalModal, setShowFinalModal] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [totalQuestions, setTotalQuestions] = useState(0);
   const [examBlocked, setExamBlocked] = useState(false);
   const [examBlockMessage, setExamBlockMessage] = useState('');
+  const [allowNavigation, setAllowNavigation] = useState(false);
+  const ignoreNextPopRef = useRef(false);
 
   // Violation popup state
   const [showViolationPopup, setShowViolationPopup] = useState(false);
@@ -205,6 +208,8 @@ const CodingPage = () => {
     else if (document.msExitFullscreen) document.msExitFullscreen();
     setFullscreen(false);
   };
+
+  const navigationLocked = started && !allowNavigation;
 
   const syncViolationState = (violationEntries = [], limitOverride = violationLimit) => {
     const limit = Math.max(1, Number(limitOverride || 3));
@@ -300,6 +305,32 @@ const CodingPage = () => {
   }, []);
 
   const forceExitExam = () => navigate('/student/dashboard');
+
+  useBeforeUnload((event) => {
+    if (!navigationLocked) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
+
+  useEffect(() => {
+    if (!navigationLocked) return undefined;
+
+    window.history.pushState({ examGuard: true }, '', window.location.href);
+
+    const handlePopState = () => {
+      if (ignoreNextPopRef.current) {
+        ignoreNextPopRef.current = false;
+        return;
+      }
+      window.history.pushState({ examGuard: true }, '', window.location.href);
+      setShowExitConfirm(true);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [navigationLocked]);
 
   // Security handlers
   useEffect(() => {
@@ -777,6 +808,9 @@ const CodingPage = () => {
           language_id: Number(langForQuestion),
           question_id: qid,
           course_id: courseId,
+          batch_id: currentQuestion.batch_id ?? null,
+          activation_version: currentQuestion.activation_version ?? null,
+          exam_session_key: currentQuestion.exam_session_key ?? null,
           student_id: studentId,
           jwt_token: token,
           stdin,
@@ -877,10 +911,14 @@ const CodingPage = () => {
   };
 
   const handleFinalSubmit = async () => {
+    setShowExitConfirm(false);
+    setEscModal(false);
+
     const currentQ = questions[currentIdx];
     if (currentQ) {
       await handleSubmit(currentQ.id, currentQ.sample_input, currentQ.sample_output);
     }
+    setAllowNavigation(true);
     exitFullScreen();
     navigate('/student/dashboard');
   };
@@ -892,13 +930,14 @@ const CodingPage = () => {
       setPageError('');
       setExamBlocked(false);
       setExamBlockMessage('');
+      setAllowNavigation(false);
       try {
         const token = localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
         // ✅ Keep your original routes
         const qResp = await axios.get(
-          `${BACKEND_API_URL}/api/questions/course/${courseId}`,
+          `${BACKEND_API_URL}/api/submissions/student-questions/${courseId}`,
           { headers }
         );
 
@@ -971,9 +1010,12 @@ const CodingPage = () => {
               : [];
             syncViolationState(existingViolations, limitFromStatus);
 
-            if (statusData.blocked) {
-              setExamBlocked(false);
-              setExamBlockMessage('');
+            if (statusData.alreadySubmitted) {
+              setExamBlocked(true);
+              setExamBlockMessage(statusData.message || 'You have already completed this exam');
+            } else if (statusData.blocked) {
+              setExamBlocked(true);
+              setExamBlockMessage(statusData.message || 'This exam is locked because the maximum number of violations has been reached.');
             }
           } catch (statusErr) {
             console.error('Could not load exam violation status:', statusErr);
@@ -1000,10 +1042,13 @@ const CodingPage = () => {
   }, [courseId]);
 
   const handleExit = () => {
-    setExitLoading(true);
-    setEscModal(true);
-    exitFullScreen();
-    setTimeout(() => navigate('/student/dashboard'), 300);
+    setExitLoading(false);
+    setShowExitConfirm(true);
+  };
+
+  const handleStayOnExam = () => {
+    setShowExitConfirm(false);
+    setExitLoading(false);
   };
 
   const handleEscContinue = () => {
@@ -1023,6 +1068,22 @@ const CodingPage = () => {
   if (loading) return <div style={{ padding: 20 }}>Loading questions.</div>;
   if (pageError) return <div style={{ color: 'red', padding: 20 }}>{pageError}</div>;
   if (!studentId) return <div style={{ color: 'red', padding: 20 }}>You must log in to attempt this exam.</div>;
+  if (examBlocked) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <div style={{ maxWidth: 640, margin: '3rem auto', background: '#fff', padding: '2rem', borderRadius: 12, boxShadow: '0 6px 30px rgba(0,0,0,0.08)' }}>
+          <h2 style={{ color: '#b91c1c', marginTop: 0 }}>Exam Unavailable</h2>
+          <p style={{ color: '#333' }}>{examBlockMessage || 'You have already completed this exam'}</p>
+          <button
+            onClick={() => navigate('/student/dashboard')}
+            style={{ marginTop: 16, padding: '10px 18px', borderRadius: 8, border: 'none', background: '#1976d2', color: '#fff', cursor: 'pointer' }}
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!started) {
     return (
@@ -1080,13 +1141,11 @@ const CodingPage = () => {
             <button
               onClick={() => {
                 if (ackState.every(Boolean)) {
-                  setExamBlocked(false);
-                  setExamBlockMessage('');
                   goFullScreen(document.documentElement);
                   setStarted(true);
                 }
               }}
-              disabled={!ackState.every(Boolean)}
+              disabled={!ackState.every(Boolean) || examBlocked}
               style={{
                 backgroundColor: ackState.every(Boolean) ? '#32bb5fff' : '#36be24da',
                 color: '#0b0c0bff',
@@ -1545,6 +1604,20 @@ const CodingPage = () => {
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button onClick={handleEscFinalSubmit} style={{ padding: '10px 16px', backgroundColor: '#dc3545', color: '#fff', borderRadius: 6 }}>Final Submit</button>
           <button onClick={handleEscContinue} style={{ padding: '10px 16px', backgroundColor: '#28a745', color: '#fff', borderRadius: 6 }}>Continue</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+{
+  showExitConfirm && (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#fff', padding: 20, borderRadius: 8, maxWidth: 420, width: 'calc(100% - 32px)' }}>
+        <h4 style={{ marginTop: 0, color: '#1976d2' }}>Exit Exam?</h4>
+        <p>Submit the exam to leave this page, or cancel to stay on the exam.</p>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button onClick={handleFinalSubmit} style={{ padding: '10px 16px', backgroundColor: '#dc3545', color: '#fff', borderRadius: 6, border: 'none' }}>Submit</button>
+          <button onClick={handleStayOnExam} style={{ padding: '10px 16px', backgroundColor: '#28a745', color: '#fff', borderRadius: 6, border: 'none' }}>Cancel</button>
         </div>
       </div>
     </div>

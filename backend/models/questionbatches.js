@@ -8,6 +8,7 @@ module.exports = (sequelize, DataTypes) => {
     batch_id: { type: DataTypes.INTEGER, allowNull: false },
 
     enabled: { type: DataTypes.BOOLEAN, defaultValue: false },
+    activation_version: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
 
     // this will store the user id who toggled — keep as INTEGER to match users.id
     toggled_by: { type: DataTypes.INTEGER, allowNull: true },

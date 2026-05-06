@@ -23,6 +23,18 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER,
       allowNull: false,
     },
+    batch_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    activation_version: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    exam_session_key: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
     student_id: {
       type: DataTypes.INTEGER,
       allowNull: false,

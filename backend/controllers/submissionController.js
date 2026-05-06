@@ -136,6 +136,145 @@ function normalizeViolationLogs(logs = []) {
   }));
 }
 
+function buildExamSessionKey(questionId, batchId, activationVersion) {
+  return `q:${Number(questionId)}:b:${batchId ? Number(batchId) : 0}:v:${Math.max(1, Number(activationVersion) || 1)}`;
+}
+
+function chooseActiveBatchState(questionBatches = [], batchIdsForCourse = []) {
+  return (questionBatches || [])
+    .filter((qb) => qb.enabled === true && batchIdsForCourse.includes(Number(qb.batch_id)))
+    .sort((a, b) => {
+      const aTime = a.toggled_at ? new Date(a.toggled_at).getTime() : 0;
+      const bTime = b.toggled_at ? new Date(b.toggled_at).getTime() : 0;
+      if (aTime !== bTime) return bTime - aTime;
+      return (Number(b.activation_version) || 1) - (Number(a.activation_version) || 1);
+    })[0] || null;
+}
+
+async function getVisibleQuestionSessionsForStudentCourse(studentId, courseId) {
+  if (!studentId || !courseId) return [];
+
+  const student = await Student.findByPk(studentId, {
+    include: [{ model: Batch, attributes: ['id', 'course_id'] }]
+  });
+  if (!student) return [];
+
+  const batchIdsForCourse = (student.Batches || [])
+    .filter((batch) => Number(batch.course_id) === Number(courseId))
+    .map((batch) => Number(batch.id))
+    .filter(Boolean);
+
+  const questionsRaw = await Question.findAll({
+    where: { course_id: Number(courseId) },
+    include: [{
+      model: db.QuestionBatch,
+      as: 'QuestionBatches',
+      required: false,
+      attributes: ['id', 'batch_id', 'enabled', 'activation_version', 'toggled_at']
+    }],
+    order: [['id', 'ASC']]
+  });
+
+  return (questionsRaw || [])
+    .map((question) => {
+      const plain = question.get ? question.get({ plain: true }) : question;
+      const qbs = plain.QuestionBatches || plain.QuestionBatch || [];
+
+      if (!qbs || qbs.length === 0) {
+        return {
+          question: plain,
+          questionId: Number(plain.id),
+          batchId: null,
+          activationVersion: 1,
+          examSessionKey: buildExamSessionKey(plain.id, null, 1),
+          isLegacyCompatible: true
+        };
+      }
+
+      const activeBatch = chooseActiveBatchState(qbs, batchIdsForCourse);
+      if (!activeBatch) return null;
+
+      const activationVersion = Math.max(1, Number(activeBatch.activation_version) || 1);
+      return {
+        question: plain,
+        questionId: Number(plain.id),
+        batchId: Number(activeBatch.batch_id),
+        activationVersion,
+        examSessionKey: buildExamSessionKey(plain.id, activeBatch.batch_id, activationVersion),
+        isLegacyCompatible: activationVersion === 1
+      };
+    })
+    .filter(Boolean);
+}
+
+async function getStudentCourseExamState(studentId, courseId) {
+  const visibleSessions = await getVisibleQuestionSessionsForStudentCourse(studentId, courseId);
+  if (!visibleSessions.length) {
+    return {
+      visibleSessions: [],
+      visibleQuestionIds: [],
+      submittedQuestionIds: [],
+      remainingQuestionIds: [],
+      hasAnySubmission: false,
+      alreadySubmitted: false
+    };
+  }
+
+  const visibleQuestionIds = visibleSessions.map((session) => session.questionId);
+  const visibleSessionKeys = visibleSessions.map((session) => session.examSessionKey);
+  const legacyCompatibleQuestionIds = visibleSessions
+    .filter((session) => session.isLegacyCompatible)
+    .map((session) => session.questionId);
+
+  const submittedRows = await Submission.findAll({
+    where: {
+      student_id: studentId,
+      [Op.or]: [
+        { exam_session_key: { [Op.in]: visibleSessionKeys } },
+        {
+          question_id: { [Op.in]: legacyCompatibleQuestionIds.length ? legacyCompatibleQuestionIds : [-1] },
+          exam_session_key: { [Op.is]: null }
+        }
+      ]
+    },
+    attributes: ['question_id', 'exam_session_key'],
+    group: ['question_id', 'exam_session_key']
+  });
+
+  const submittedSessionKeys = new Set();
+  const submittedQuestionIdSet = new Set();
+  submittedRows.forEach((row) => {
+    const questionId = Number(row.question_id);
+    const sessionKey = row.exam_session_key || null;
+    if (sessionKey) {
+      submittedSessionKeys.add(String(sessionKey));
+      if (questionId) submittedQuestionIdSet.add(questionId);
+      return;
+    }
+
+    const legacySession = visibleSessions.find((session) => session.questionId === questionId && session.isLegacyCompatible);
+    if (legacySession) {
+      submittedSessionKeys.add(legacySession.examSessionKey);
+      submittedQuestionIdSet.add(questionId);
+    }
+  });
+
+  const remainingSessions = visibleSessions.filter((session) => !submittedSessionKeys.has(session.examSessionKey));
+  const submittedQuestionIds = visibleSessions
+    .filter((session) => submittedSessionKeys.has(session.examSessionKey))
+    .map((session) => session.questionId);
+  const remainingQuestionIds = remainingSessions.map((session) => session.questionId);
+
+  return {
+    visibleSessions,
+    visibleQuestionIds,
+    submittedQuestionIds,
+    remainingQuestionIds,
+    hasAnySubmission: submittedSessionKeys.size > 0,
+    alreadySubmitted: visibleSessions.length > 0 && remainingSessions.length === 0
+  };
+}
+
 function formatTestCaseResultsForFeedback(rows = []) {
   return rows.map((row, index) => ({
     number: index + 1,
@@ -161,14 +300,21 @@ exports.getExamViolationStatus = async (req, res) => {
     const violationLimit = Math.max(1, Number(course?.allowed_violations) || 3);
     const logs = await getExamViolationLogs(studentId, courseId);
     const count = logs.length;
+    const examState = await getStudentCourseExamState(studentId, courseId);
+    const alreadySubmitted = examState.alreadySubmitted;
+    const blocked = alreadySubmitted || count >= violationLimit;
 
     return res.status(200).json({
       success: true,
       courseId: Number(courseId),
+      alreadySubmitted,
       violationLimit,
       violationCount: count,
       remainingViolations: Math.max(0, violationLimit - count),
-      blocked: count >= violationLimit,
+      blocked,
+      message: alreadySubmitted
+        ? 'You have already completed this exam'
+        : (count >= violationLimit ? 'This exam is locked because the maximum number of violations has been reached.' : ''),
       violations: normalizeViolationLogs(logs)
     });
   } catch (err) {
@@ -307,6 +453,13 @@ exports.submitCode = async (req, res) => {
       await t.rollback();
       return res.status(404).json({ message: 'Question not found' });
     }
+    const resolvedCourseId = Number(course_id || question.course_id);
+    const visibleSessions = await getVisibleQuestionSessionsForStudentCourse(student_id, resolvedCourseId);
+    const currentExamSession = visibleSessions.find((session) => Number(session.questionId) === Number(question_id));
+    if (!currentExamSession) {
+      await t.rollback();
+      return res.status(403).json({ message: 'This question is not active for the student in the current exam' });
+    }
     const testcases = await db.Testcase.findAll({
       where: { question_id },
       transaction: t
@@ -435,6 +588,7 @@ exports.submitCode = async (req, res) => {
       where: {
         question_id,
         student_id,
+        exam_session_key: currentExamSession.examSessionKey,
         createdAt: { [Op.between]: [startOfDay, endOfDay] }
       },
       order: [['id', 'DESC']],
@@ -452,6 +606,9 @@ exports.submitCode = async (req, res) => {
       existing.output = JSON.stringify(judgeResult);
       existing.status = gradedStatus;
       existing.score = Number(awarded_score);
+      existing.batch_id = currentExamSession.batchId;
+      existing.activation_version = currentExamSession.activationVersion;
+      existing.exam_session_key = currentExamSession.examSessionKey;
       existing.execution_time = judgeResult.time ? String(judgeResult.time) : existing.execution_time || null;
       existing.updatedAt = new Date();
       submission = await existing.save({ transaction: t });
@@ -465,6 +622,9 @@ exports.submitCode = async (req, res) => {
         language_id: Number(language_id),
         question_id,
         student_id,
+        batch_id: currentExamSession.batchId,
+        activation_version: currentExamSession.activationVersion,
+        exam_session_key: currentExamSession.examSessionKey,
         output: JSON.stringify(judgeResult),
         status: gradedStatus,
         execution_time: judgeResult.time ? String(judgeResult.time) : null,
@@ -529,27 +689,49 @@ exports.submitCode = async (req, res) => {
           const feedback = await generateFeedback(feedbackPayload);
           console.log(`[Feedback] Generated feedback for submission ${submissionId}:`, feedback);
 
-          await db.SubmissionFeedback.create({
-            submission_id: submissionId,
-            summary: feedback.summary || null,
-            what_went_wrong: feedback.what_went_wrong || null,
-            hint: feedback.hint || null,
-            positive: feedback.positive || null,
-            similarity_percentage: feedback.similarity_percentage != null ? Number(feedback.similarity_percentage) : null,
-            similarity_feedback: feedback.similarity_feedback || null,
-            testcase_feedback: feedback.testcase_feedback || null,
-            status: 'done'
+          const [feedbackRow, created] = await db.SubmissionFeedback.findOrCreate({
+            where: { submission_id: submissionId },
+            defaults: {
+              submission_id: submissionId,
+              summary: feedback.summary || null,
+              what_went_wrong: feedback.what_went_wrong || null,
+              hint: feedback.hint || null,
+              positive: feedback.positive || null,
+              similarity_percentage: feedback.similarity_percentage != null ? Number(feedback.similarity_percentage) : null,
+              similarity_feedback: feedback.similarity_feedback || null,
+              testcase_feedback: feedback.testcase_feedback || null,
+              status: 'done'
+            }
           });
+
+          if (!created) {
+            feedbackRow.summary = feedback.summary || null;
+            feedbackRow.what_went_wrong = feedback.what_went_wrong || null;
+            feedbackRow.hint = feedback.hint || null;
+            feedbackRow.positive = feedback.positive || null;
+            feedbackRow.similarity_percentage = feedback.similarity_percentage != null ? Number(feedback.similarity_percentage) : null;
+            feedbackRow.similarity_feedback = feedback.similarity_feedback || null;
+            feedbackRow.testcase_feedback = feedback.testcase_feedback || null;
+            feedbackRow.status = 'done';
+            await feedbackRow.save();
+          }
           console.log(`[Feedback] Successfully saved feedback for submission ${submissionId}`);
         } catch (err) {
           console.error(`[Feedback] Failed for submission ${submissionId}:`, err.message);
           console.error(`[Feedback] Error details:`, err);
           // Silently create a failed record so the frontend knows to stop polling
           try {
-            await db.SubmissionFeedback.create({
-              submission_id: submissionId,
-              status: 'failed'
+            const [feedbackRow, created] = await db.SubmissionFeedback.findOrCreate({
+              where: { submission_id: submissionId },
+              defaults: {
+                submission_id: submissionId,
+                status: 'failed'
+              }
             });
+            if (!created) {
+              feedbackRow.status = 'failed';
+              await feedbackRow.save();
+            }
             console.log(`[Feedback] Created failed record for submission ${submissionId}`);
           } catch (createErr) {
             console.error(`[Feedback] Failed to create failed record:`, createErr.message);
@@ -659,11 +841,25 @@ exports.getCompletedCourses = async (req, res) => {
     const submissions = await Submission.findAll({
       where: { student_id: studentId },
       include: [{ model: Question, attributes: ['course_id'] }],
-      attributes: ['id']
+      attributes: ['question_id'],
+      group: ['Submission.question_id', 'Question.id', 'Question.course_id']
     });
 
-    const courseIds = [...new Set(submissions.map(s => s.Question?.course_id).filter(Boolean))];
-    return res.status(200).json({ courses: courseIds });
+    const attemptedCourseIds = [...new Set(
+      submissions
+        .map((submission) => Number(submission.Question?.course_id))
+        .filter(Boolean)
+    )];
+
+    const completedCourseIds = [];
+    for (const courseId of attemptedCourseIds) {
+      const examState = await getStudentCourseExamState(studentId, courseId);
+      if (examState.alreadySubmitted) {
+        completedCourseIds.push(courseId);
+      }
+    }
+
+    return res.status(200).json({ courses: completedCourseIds });
   } catch (err) {
     console.error('getCompletedCourses error:', err);
     return res.status(500).json({ message: 'Could not fetch completed courses', error: err.message });
@@ -748,6 +944,25 @@ exports.getQuestionsForStudentCourse = async (req, res) => {
       });
       return res.status(200).json({ questions: normalized, count: normalized.length });
     }
+
+    const examState = await getStudentCourseExamState(studentId, courseId);
+    const remainingSessions = (examState.visibleSessions || []).filter(
+      (session) => examState.remainingQuestionIds.includes(session.questionId)
+    );
+
+    const currentCycleQuestions = remainingSessions.map((session) => {
+      const plain = session.question || {};
+      return {
+        ...plain,
+        batch_id: session.batchId,
+        activation_version: session.activationVersion,
+        exam_session_key: session.examSessionKey,
+        language_id: plain.language_id ?? null,
+        score: plain.score ?? null,
+      };
+    });
+
+    return res.status(200).json({ questions: currentCycleQuestions, count: currentCycleQuestions.length });
 
     // Collect question IDs for this course
     const questionIds = questions.map(q => q.id).filter(Boolean);
@@ -1135,19 +1350,30 @@ exports.getMySubmissions = async (req, res) => {
           model: Student,
           attributes: ['id', 'name', 'email'],
           include: [{ model: Batch, attributes: ['id', 'name', 'code'] }]
-        },
-        {
-          model: db.SubmissionFeedback,
-          as: 'Feedback',
-          attributes: ['similarity_percentage', 'similarity_feedback', 'status'],
-          required: false
         }
       ],
       order: [['createdAt', 'DESC']],
       limit: 200
     });
 
-    const data = subs.map(s => ({
+    const submissionIds = subs.map((s) => s.id).filter(Boolean);
+    const feedbackRows = submissionIds.length
+      ? await db.SubmissionFeedback.findAll({
+          where: { submission_id: submissionIds },
+          order: [['submission_id', 'ASC'], ['createdAt', 'DESC'], ['id', 'DESC']]
+        })
+      : [];
+
+    const latestFeedbackBySubmission = new Map();
+    feedbackRows.forEach((feedback) => {
+      if (!latestFeedbackBySubmission.has(feedback.submission_id)) {
+        latestFeedbackBySubmission.set(feedback.submission_id, feedback);
+      }
+    });
+
+    const data = subs.map(s => {
+      const feedback = latestFeedbackBySubmission.get(s.id);
+      return {
       id: s.id,
       question_id: s.question_id,
       question_title: s.Question?.title || null,
@@ -1155,12 +1381,13 @@ exports.getMySubmissions = async (req, res) => {
       course: s.Question?.Course ? { id: s.Question.Course.id, name: s.Question.Course.name, code: s.Question.Course.course_code || s.Question.Course.code } : null,
       status: s.status,
       score: s.score,
-      similarity_score: s.Feedback?.similarity_percentage ?? null,
-      similarity_feedback: s.Feedback?.similarity_feedback ?? null,
-      feedback_status: s.Feedback?.status ?? null,
+      similarity_score: feedback?.similarity_percentage ?? null,
+      similarity_feedback: feedback?.similarity_feedback ?? null,
+      feedback_status: feedback?.status ?? null,
       createdAt: s.createdAt,
       student_batches: (s.Student?.Batches || []).map(b => ({ id: b.id, name: b.name, code: b.code }))
-    }));
+    };
+    });
 
     return res.status(200).json({ success: true, submissions: data });
   } catch (err) {
@@ -1213,5 +1440,114 @@ exports.approveSubmission = async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ message: err.message });
+  }
+};
+
+exports.getStudentViolationsForFaculty = async (req, res) => {
+  try {
+    const facultyId = req.user && req.user.id;
+    if (!facultyId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    // Get courses assigned to this faculty
+    const facultyCourses = await Course.findAll({
+      include: [{
+        model: User,
+        as: 'Faculties',
+        where: { id: facultyId },
+        attributes: []
+      }],
+      attributes: ['id', 'name', 'course_code', 'allowed_violations']
+    });
+
+    const courseIds = facultyCourses.map(c => c.id);
+    if (!courseIds.length) {
+      return res.status(200).json({ success: true, violations: [] });
+    }
+
+    // Get all students in these courses
+    const studentsInCourses = await Student.findAll({
+      include: [{
+        model: Course,
+        where: { id: courseIds },
+        attributes: ['id', 'name', 'course_code', 'allowed_violations'],
+        through: { attributes: [] }
+      }],
+      attributes: ['id', 'name', 'email']
+    });
+
+    const violations = [];
+    for (const student of studentsInCourses) {
+      for (const course of student.Courses) {
+        const logs = await getExamViolationLogs(student.id, course.id);
+        const violationLimit = Math.max(1, Number(course.allowed_violations) || 1);
+        const count = logs.length;
+        const examState = await getStudentCourseExamState(student.id, course.id);
+        const alreadySubmitted = examState.alreadySubmitted;
+        const blockedByViolation = count >= violationLimit;
+
+        if (count > 0) {
+          violations.push({
+            studentId: student.id,
+            studentName: student.name,
+            studentEmail: student.email,
+            courseId: course.id,
+            courseName: course.name,
+            courseCode: course.course_code,
+            violationLimit,
+            violationCount: count,
+            remainingViolations: Math.max(0, violationLimit - count),
+            blocked: blockedByViolation,
+            alreadySubmitted,
+            violations: normalizeViolationLogs(logs)
+          });
+        }
+      }
+    }
+
+    return res.status(200).json({ success: true, violations });
+  } catch (err) {
+    console.error('getStudentViolationsForFaculty error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to fetch violations', error: err.message });
+  }
+};
+
+exports.resetStudentViolations = async (req, res) => {
+  try {
+    const facultyId = req.user && req.user.id;
+    const { studentId, courseId } = req.params;
+
+    if (!facultyId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    if (!studentId || !courseId) return res.status(400).json({ success: false, message: 'studentId and courseId are required' });
+
+    // Verify faculty is assigned to the course
+    const course = await Course.findByPk(courseId, {
+      include: [{
+        model: User,
+        as: 'Faculties',
+        where: { id: facultyId },
+        attributes: ['id']
+      }]
+    });
+
+    if (!course || !course.Faculties || course.Faculties.length === 0) {
+      return res.status(403).json({ success: false, message: 'You are not assigned to this course' });
+    }
+
+    // Delete all violation logs for this student and course
+    if (AuditLog) {
+      await AuditLog.destroy({
+        where: {
+          user_id: studentId,
+          action: EXAM_VIOLATION_ACTION,
+          resource_type: 'COURSE_EXAM',
+          resource_id: Number(courseId)
+        }
+      });
+    }
+
+    return res.status(200).json({ success: true, message: 'Violations reset successfully' });
+  } catch (err) {
+    console.error('resetStudentViolations error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to reset violations', error: err.message });
   }
 };

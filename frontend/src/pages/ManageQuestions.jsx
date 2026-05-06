@@ -272,11 +272,17 @@ export default function ManageQuestions() {
     const key = `${questionId}_${batchId}`;
     setToggling(prev => ({ ...prev, [key]: true }));
     try {
-      await axios.post(`${API}/questions/${questionId}/batch/${batchId}/toggle`, {}, { headers });
+      const res = await axios.post(`${API}/questions/${questionId}/batch/${batchId}/toggle`, {}, { headers });
+      const nextState = res?.data?.questionBatch || {};
       setQuestions(prev => prev.map(q => {
         if (String(q.id) !== String(questionId)) return q;
         const bs = { ...q.batch_states };
-        bs[batchId] = { ...bs[batchId], enabled: !currentEnabled, toggled_at: new Date().toISOString() };
+        bs[batchId] = {
+          ...bs[batchId],
+          enabled: typeof nextState.enabled === 'boolean' ? nextState.enabled : !currentEnabled,
+          activation_version: Number(nextState.activation_version) || bs[batchId]?.activation_version || 1,
+          toggled_at: nextState.toggled_at || new Date().toISOString()
+        };
         return { ...q, batch_states: bs };
       }));
     } catch {

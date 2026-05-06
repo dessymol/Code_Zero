@@ -18,40 +18,59 @@ const COURSE_COLORS = [
   { bg: 'bg-indigo-600', light: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', accent: '#4f46e5' },
   { bg: 'bg-teal-600', light: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200', accent: '#0d9488' },
 ];
+
 const COURSE_ICONS = [GraduationCap, FileQuestion, ClipboardList, Trophy, BookOpen];
 
 const StudentDashboard = () => {
   const [courses, setCourses] = useState([]);
+  const [completedCourseIds, setCompletedCourseIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const fetchCourses = async () => {
-    setLoading(true); setError('');
+    setLoading(true);
+    setError('');
+
     try {
       const token = localStorage.getItem('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const resp = await axios.get('http://localhost:3000/api/students/courses-with-exams', { headers });
-      const list = Array.isArray(resp.data.courses) ? resp.data.courses : [];
-      setCourses(list.map(c => ({
+
+      const [coursesResp, completedResp] = await Promise.all([
+        axios.get('http://localhost:3000/api/students/courses-with-exams', { headers }),
+        axios.get('http://localhost:3000/api/submissions/completed-courses', { headers }).catch(() => ({ data: { courses: [] } }))
+      ]);
+
+      const list = Array.isArray(coursesResp.data.courses) ? coursesResp.data.courses : [];
+      const completed = Array.isArray(completedResp.data?.courses)
+        ? completedResp.data.courses.map(Number).filter(Boolean)
+        : [];
+
+      setCourses(list.map((c) => ({
         course_id: c.course_id ?? c.id ?? null,
         course_name: c.course_name ?? c.name ?? '',
         course_code: c.course_code ?? c.code ?? '',
         hasExam: !!(c.hasExam === true || c.hasExam === 1 || c.hasExam === '1' || c.hasExam === 'true'),
         description: c.description ?? c.course_description ?? c.course_desc ?? c.desc ?? c.details ?? c.summary ?? '',
       })));
+      setCompletedCourseIds(completed);
     } catch (err) {
       setError('Failed to load courses. Please try again.');
       setCourses([]);
-    } finally { setLoading(false); }
+      setCompletedCourseIds([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { fetchCourses(); }, []);
+  useEffect(() => {
+    fetchCourses();
+  }, []);
 
   const stats = [
     { label: 'Enrolled Courses', value: courses.length, icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
-    { label: 'Exams Available', value: courses.filter(c => c.hasExam).length, icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
-    { label: 'Pending Exams', value: courses.filter(c => !c.hasExam).length, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100' },
+    { label: 'Exams Available', value: courses.filter((course) => course.hasExam && !completedCourseIds.includes(Number(course.course_id ?? course.id))).length, icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
+    { label: 'Pending Exams', value: courses.filter((course) => !course.hasExam).length, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100' },
   ];
 
   return (
@@ -59,8 +78,6 @@ const StudentDashboard = () => {
       <StudentNavbar />
       <div className="fixed inset-0 overflow-auto lms-page-bg" style={{ top: '56px' }}>
         <div className="lms-container py-6 md:py-8 min-h-full">
-
-          {/* Header */}
           <div className="relative mb-8 rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-white">
             <div className="absolute inset-0 opacity-5" style={{ background: 'linear-gradient(135deg, #059669, #2563eb)' }} />
             <div className="relative p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center gap-5">
@@ -71,31 +88,38 @@ const StudentDashboard = () => {
                 <h1 className="text-2xl md:text-3xl font-bold text-slate-900 mb-1">My Learning Portal</h1>
                 <p className="text-slate-500">View your assigned courses and start your exams</p>
               </div>
-              <button onClick={fetchCourses} disabled={loading}
-                className="lms-btn-primary gap-2" style={{ background: 'linear-gradient(135deg, #059669, #0d9488)', border: 'none' }}>
+              <button
+                onClick={fetchCourses}
+                disabled={loading}
+                className="lms-btn-primary gap-2"
+                style={{ background: 'linear-gradient(135deg, #059669, #0d9488)', border: 'none' }}
+              >
                 <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                 Refresh
               </button>
             </div>
           </div>
 
-          {/* Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
-            {stats.map((s, i) => (
-              <motion.div key={i} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
-                className={`lms-card p-5 flex items-center gap-4 border ${s.border}`}>
-                <div className={`w-12 h-12 rounded-xl ${s.bg} flex items-center justify-center shrink-0`}>
-                  <s.icon size={22} className={s.color} />
+            {stats.map((stat, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.06 }}
+                className={`lms-card p-5 flex items-center gap-4 border ${stat.border}`}
+              >
+                <div className={`w-12 h-12 rounded-xl ${stat.bg} flex items-center justify-center shrink-0`}>
+                  <stat.icon size={22} className={stat.color} />
                 </div>
                 <div>
-                  <div className={`text-3xl font-black ${s.color}`}>{s.value}</div>
-                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{s.label}</div>
+                  <div className={`text-3xl font-black ${stat.color}`}>{stat.value}</div>
+                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{stat.label}</div>
                 </div>
               </motion.div>
             ))}
           </div>
 
-          {/* Courses */}
           {loading ? (
             <div className="flex flex-col items-center justify-center py-24 gap-4">
               <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
@@ -125,25 +149,29 @@ const StudentDashboard = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                 {courses.map((course, index) => {
                   const id = course.course_id ?? course.id;
+                  const alreadyCompleted = completedCourseIds.includes(Number(id));
                   const color = COURSE_COLORS[index % COURSE_COLORS.length];
                   const Icon = COURSE_ICONS[index % COURSE_ICONS.length];
+
                   return (
-                    <motion.div key={id ?? index}
-                      initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }}
-                      className="group bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-200 overflow-hidden flex flex-col">
-                      {/* Card Top Strip */}
+                    <motion.div
+                      key={id ?? index}
+                      initial={{ opacity: 0, y: 16 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="group bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-200 overflow-hidden flex flex-col"
+                    >
                       <div className={`h-1.5 ${color.bg}`} />
                       <div className="p-5 flex-1 flex flex-col">
-                        {/* Icon + Badge */}
                         <div className="flex items-start justify-between mb-4">
                           <div className={`w-11 h-11 rounded-xl ${color.bg} flex items-center justify-center shadow-sm`}>
                             <Icon size={22} className="text-white" />
                           </div>
                           <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${color.light} ${color.text} border ${color.border}`}>
-                            {course.hasExam ? '✓ Ready' : 'Upcoming'}
+                            {alreadyCompleted ? 'Completed' : (course.hasExam ? 'Ready' : 'Upcoming')}
                           </span>
                         </div>
-                        {/* Course Info */}
+
                         <div className="flex-1 mb-5">
                           <h3 className="font-bold text-slate-800 text-base leading-snug mb-1 line-clamp-2">{course.course_name}</h3>
                           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{course.course_code}</p>
@@ -151,16 +179,19 @@ const StudentDashboard = () => {
                             <p className="text-xs text-slate-500 mt-2 line-clamp-2">{course.description}</p>
                           )}
                         </div>
-                        {/* CTA Button */}
+
                         <button
-                          onClick={() => course.hasExam && navigate(`/student/exam/${id}`)}
-                          disabled={!course.hasExam}
+                          onClick={() => course.hasExam && !alreadyCompleted && navigate(`/student/exam/${id}`)}
+                          disabled={!course.hasExam || alreadyCompleted}
                           className={`w-full py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 text-sm font-bold transition-all duration-150 ${
-                            course.hasExam
+                            course.hasExam && !alreadyCompleted
                               ? `${color.bg} text-white shadow-sm hover:brightness-95 active:scale-95`
                               : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                          }`}>
-                          {course.hasExam ? (<><Play size={15} fill="currentColor" /> Start Exam</>) : (<><Clock size={15} /> Not Available</>)}
+                          }`}
+                        >
+                          {alreadyCompleted
+                            ? (<><CheckCircle size={15} /> Completed</>)
+                            : (course.hasExam ? (<><Play size={15} fill="currentColor" /> Start Exam</>) : (<><Clock size={15} /> Not Available</>))}
                         </button>
                       </div>
                     </motion.div>
@@ -174,4 +205,5 @@ const StudentDashboard = () => {
     </>
   );
 };
+
 export default StudentDashboard;

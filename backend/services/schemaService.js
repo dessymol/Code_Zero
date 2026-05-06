@@ -55,6 +55,42 @@ const ensureApplicationSchema = async (sequelize, logger = console) => {
     `);
     logger.info('[DB Schema] Added submissionfeedbacks.testcase_feedback column.');
   }
+
+  const questionBatchesHasActivationVersion = await hasColumn(sequelize, 'question_batches', 'activation_version');
+  if (!questionBatchesHasActivationVersion) {
+    await sequelize.query(`
+      ALTER TABLE question_batches
+      ADD COLUMN activation_version INT NOT NULL DEFAULT 1
+    `);
+    logger.info('[DB Schema] Added question_batches.activation_version column.');
+  }
+
+  const submissionsHasBatchId = await hasColumn(sequelize, 'submissions', 'batch_id');
+  if (!submissionsHasBatchId) {
+    await sequelize.query(`
+      ALTER TABLE submissions
+      ADD COLUMN batch_id INT NULL
+    `);
+    logger.info('[DB Schema] Added submissions.batch_id column.');
+  }
+
+  const submissionsHasActivationVersion = await hasColumn(sequelize, 'submissions', 'activation_version');
+  if (!submissionsHasActivationVersion) {
+    await sequelize.query(`
+      ALTER TABLE submissions
+      ADD COLUMN activation_version INT NULL
+    `);
+    logger.info('[DB Schema] Added submissions.activation_version column.');
+  }
+
+  const submissionsHasExamSessionKey = await hasColumn(sequelize, 'submissions', 'exam_session_key');
+  if (!submissionsHasExamSessionKey) {
+    await sequelize.query(`
+      ALTER TABLE submissions
+      ADD COLUMN exam_session_key VARCHAR(255) NULL
+    `);
+    logger.info('[DB Schema] Added submissions.exam_session_key column.');
+  }
 };
 
 module.exports = {
