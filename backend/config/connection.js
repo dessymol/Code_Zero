@@ -1,3 +1,7 @@
+/**
+ * Database connection setup and schema synchronization utilities.
+ * Exposes the Sequelize instance and a helper function to verify DB connectivity.
+ */
 const { Sequelize } = require('sequelize');
 const path = require('path');
 const logger = console;
@@ -48,6 +52,7 @@ const testConnection = async () => {
     };
 
     try {
+      // Sync database schema to create missing tables when allowed by environment.
       await sequelize.sync(syncOptions);
       logger.info('Database schema synchronized successfully.');
       await ensureApplicationSchema(sequelize, logger);

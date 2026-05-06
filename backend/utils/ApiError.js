@@ -1,3 +1,7 @@
+/**
+ * Custom error class for API handlers.
+ * Stores an HTTP status code alongside the error message.
+ */
 class ApiError extends Error {
   constructor(statusCode, message) {
     super(message);

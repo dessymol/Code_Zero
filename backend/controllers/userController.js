@@ -1,3 +1,7 @@
+/**
+ * User controller for authentication, profile updates and faculty LLM provider preferences.
+ * Exposes route handlers for login, password changes, getting the current user, and updating user settings.
+ */
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { User } = require('../models');
@@ -7,6 +11,11 @@ const { writeAuditLog } = require('../services/auditLogService');
 const { getProviderConfig, normalizeProvider, SUPPORTED_PROVIDERS } = require('../services/llmServices');
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * Authenticate user credentials and return a JWT token.
+ * Input: req.body.email, req.body.password
+ * Output: 200 JSON { message, token, user }
+ */
 exports.login = async (req, res, next) => {
   try {
     const { email, password } = req.body || {};
@@ -79,6 +88,11 @@ exports.login = async (req, res, next) => {
   }
 };
 
+/**
+ * Change the authenticated user's password.
+ * Input: req.body.currentPassword, req.body.newPassword
+ * Output: 200 JSON { success, message }
+ */
 exports.changePassword = async (req, res, next) => {
   try {
     const userId = req.user?.id;
@@ -118,12 +132,9 @@ exports.changePassword = async (req, res, next) => {
   }
 };
 
-// add near the top of userController.js (after login/changePassword)
-// if not already imported
-
 /**
- * GET /api/v1/users/me
- * Return the current user's public info (exclude password)
+ * Get the current authenticated user's public profile.
+ * Output: 200 JSON { success, data: user }
  */
 exports.getMe = async (req, res, next) => {
   try {
@@ -142,12 +153,10 @@ exports.getMe = async (req, res, next) => {
 };
 
 /**
- * PUT /api/v1/users/me
- * Update the current user's profile fields (name, email, phone).
- * Returns the updated user (password excluded).
+ * Update current authenticated user's profile data.
+ * Input: req.body.name, req.body.email, req.body.phone
+ * Output: 200 JSON { success, data: updatedUser }
  */
-// userController.js
-
 exports.updateMe = async (req, res, next) => {
   try {
     const userId = req.user?.id;
@@ -201,6 +210,10 @@ exports.updateMe = async (req, res, next) => {
   }
 };
 
+/**
+ * Retrieve the current faculty user's selected LLM provider and supported runtime info.
+ * Output: 200 JSON { success, data: { selectedProvider, supportedProviders, runtime } }
+ */
 exports.getMyLlmProvider = async (req, res, next) => {
   try {
     const userId = req.user?.id;
@@ -227,6 +240,11 @@ exports.getMyLlmProvider = async (req, res, next) => {
   }
 };
 
+/**
+ * Update the authenticated faculty user's preferred LLM provider.
+ * Input: req.body.provider
+ * Output: 200 JSON { success, message, data }
+ */
 exports.updateMyLlmProvider = async (req, res, next) => {
   try {
     const userId = req.user?.id;

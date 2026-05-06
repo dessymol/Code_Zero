@@ -1,3 +1,7 @@
+/**
+ * User-related API routes.
+ * Handles login, profile management, password changes, faculty LLM preferences, and user administration.
+ */
 const express = require('express');
 const {
   login,

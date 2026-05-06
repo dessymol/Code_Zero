@@ -1,5 +1,9 @@
 const axios = require('axios');
 
+/**
+ * Judge0Service wraps the Judge0 API for code execution.
+ * Supports both local/self-hosted Judge0 instances and RapidAPI-hosted Judge0.
+ */
 class Judge0Service {
   constructor() {
     this.rapidApiKey = process.env.RAPIDAPI_KEY || null;

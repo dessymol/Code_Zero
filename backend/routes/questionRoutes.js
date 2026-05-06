@@ -1,4 +1,7 @@
-// routes/questionRoutes.js
+/**
+ * Question API route definitions.
+ * Maps request paths to question and testcase controller actions with role-based access control.
+ */
 const express = require('express');
 const router = express.Router();
 const questionController = require('../controllers/questionController');

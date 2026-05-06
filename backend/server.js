@@ -1,4 +1,8 @@
-// server.js (updated)
+/**
+ * Main API server entrypoint.
+ * Configures Express app middleware, CORS, route wiring, socket.io, Swagger docs,
+ * database connectivity and server startup.
+ */
 const path = require('path');
 const dotenv = require('dotenv');
 dotenv.config({ path: path.resolve(__dirname, '.env') });
@@ -43,6 +47,7 @@ const swaggerUi = require("swagger-ui-express");
 
 const app = express();
 
+// Configure allowed CORS origins from environment or default local frontend URL.
 const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
   .split(',')
   .map((origin) => origin.trim())
@@ -67,10 +72,11 @@ app.use((req, res, next) => {
   next();
 });
 
+// Parse JSON request bodies and log incoming requests in development.
 app.use(express.json());
 app.use(morgan('dev'));
 
-//Swager implementation
+// Swagger implementation
 const swaggerOptions = {
   definition: {
     openapi: '3.0.0', // OpenAPI version
@@ -117,7 +123,7 @@ try {
   console.warn('Chat socket init failed (file may not exist yet)', err.message || err);
 }
 
-// mount routes (chat route before 404)
+// Mount application routes. setupRoutes is mounted before authenticated routes to allow initialization workflows.
 app.use(setupRoutes);
 app.use('/api', setupRoutes);
 app.use('/api', requireInitialized);
@@ -129,13 +135,9 @@ app.use('/api/submissions', submissionRoutes);
 app.use('/api/results', resultsRoutes);
 app.use('/api/export', exportRoutes);
 
-// chat routes
+// Chat, password reset, and audit log route groups
 app.use('/api/chats', chatRoutes);
-
-// password reset routes
 app.use('/api/password-reset', passwordResetRoutes);
-
-// audit log routes
 app.use('/api/audit-logs', auditRoutes);
 
 //Excel
