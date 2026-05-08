@@ -1,16 +1,12 @@
 const axios = require('axios');
 
-const API_KEY = process.env.GROQ_API_KEY;
-const MODEL = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
-const BASE_URL = process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1';
-const TIMEOUT = parseInt(process.env.GROQ_TIMEOUT_MS || '60000', 10);
-const MAX_OUTPUT_TOKENS = parseInt(process.env.GROQ_MAX_OUTPUT_TOKENS || '4096', 10);
+async function call(prompt, config = {}) {
+    const API_KEY = config?.api_key || process.env.GROQ_API_KEY;
+    const MODEL = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
+    const BASE_URL = config?.base_url || process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1';
+    const TIMEOUT = parseInt(process.env.GROQ_TIMEOUT_MS || '60000', 10);
+    const MAX_OUTPUT_TOKENS = parseInt(process.env.GROQ_MAX_OUTPUT_TOKENS || '4096', 10);
 
-if (!API_KEY) {
-    console.warn('[groqAdapter] GROQ_API_KEY is not set. Groq calls will fail.');
-}
-
-async function call(prompt) {
     if (!API_KEY) {
         throw new Error('GROQ_API_KEY is not configured');
     }

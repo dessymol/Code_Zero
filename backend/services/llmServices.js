@@ -1,10 +1,12 @@
 // backend/services/llmService.js
-// Central LLM service. All callers use this file only.
-// Primary provider can be passed per request, then falls back to LLM_PROVIDER.
-// If the primary provider fails, we fall back through the remaining adapters.
+// Central LLM service.
+// Provider selection is driven by centralized DB-backed `api_settings` (active config),
+// with optional env/faculty fallback to avoid breaking existing functionality.
 
 const DEFAULT_PROVIDER = 'gemini';
 const SUPPORTED_PROVIDERS = ['gemini', 'groq', 'local'];
+
+const { getAllLLMConfigs } = require('./apiSettingsService');
 
 const adapters = {
     gemini: require('./adapters/geminiAdapters'),
@@ -17,34 +19,72 @@ function normalizeProvider(value) {
     return SUPPORTED_PROVIDERS.includes(provider) ? provider : DEFAULT_PROVIDER;
 }
 
-function getAdapterOrder(preferredProvider) {
-    const primary = normalizeProvider(preferredProvider);
-    return [primary, ...SUPPORTED_PROVIDERS.filter((name) => name !== primary)];
-}
+async function getProviderConfig() {
+    const dbConfigs = await getAllLLMConfigs();
+    const useDb = dbConfigs.length > 0;
 
-function getProviderConfig() {
+    const configByAdapter = new Map();
+    for (const cfg of dbConfigs) {
+        if (!cfg.adapter_provider) continue;
+        configByAdapter.set(cfg.adapter_provider, cfg);
+    }
+
+    const configuredFor = (name) => {
+        if (!useDb) {
+            return name === 'gemini' ? Boolean(process.env.GEMINI_API_KEY) :
+                name === 'groq' ? Boolean(process.env.GROQ_API_KEY) :
+                    true;
+        }
+
+        const cfg = configByAdapter.get(name);
+        if (!cfg) return false;
+
+        if (name === 'gemini') return Boolean(cfg.api_key);
+        if (name === 'groq') return Boolean(cfg.api_key);
+        // local == ollama
+        return Boolean(cfg.base_url);
+    };
+
     return {
         selected: normalizeProvider(process.env.LLM_PROVIDER),
         providers: SUPPORTED_PROVIDERS.map((name) => ({
             name,
-            configured:
-                name === 'gemini' ? Boolean(process.env.GEMINI_API_KEY) :
-                name === 'groq' ? Boolean(process.env.GROQ_API_KEY) :
-                true
-        }))
+            configured: configuredFor(name),
+        })),
     };
 }
 
 async function callWithFallback(prompt, options = {}) {
-    const order = getAdapterOrder(options.provider);
+    const requestedProvider = options.provider;
+
+    const dbConfigs = await getAllLLMConfigs();
+    const useDb = dbConfigs.length > 0;
+
+    const configByAdapter = new Map();
+    let activeAdapterProvider = '';
+    for (const cfg of dbConfigs) {
+        if (!cfg.adapter_provider) continue;
+        configByAdapter.set(cfg.adapter_provider, cfg);
+        if (cfg.is_active) activeAdapterProvider = cfg.adapter_provider;
+    }
+
+    const primary = activeAdapterProvider || normalizeProvider(requestedProvider);
+    const order = [primary, ...SUPPORTED_PROVIDERS.filter((name) => name !== primary)];
+
     const errors = [];
 
-    for (const name of order) {
+    const candidates = useDb ? order.filter((name) => configByAdapter.has(name)) : order;
+    if (candidates.length === 0) {
+        throw new Error('All LLM providers failed. No configured LLM providers found (api_settings)');
+    }
+
+    for (const name of candidates) {
         const adapter = adapters[name];
         if (!adapter?.call) continue;
 
         try {
-            return await adapter.call(prompt);
+            const cfg = configByAdapter.get(name);
+            return await adapter.call(prompt, cfg || {});
         } catch (err) {
             const message = err?.message || String(err);
             errors.push(`${name}: ${message}`);

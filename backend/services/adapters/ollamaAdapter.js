@@ -1,16 +1,17 @@
 // backend/services/adapters/ollamaAdapter.js
 const axios = require('axios');
 
-const BASE_URL = process.env.LOCAL_LLM_URL || 'http://localhost:11434';
-const MODEL = process.env.LOCAL_LLM_MODEL || 'qwen2.5-coder:3b';
-const TIMEOUT = parseInt(process.env.LOCAL_LLM_TIMEOUT_MS || '60000', 10);
-
 /**
  * Send a prompt to Ollama and return the raw text response.
  * @param {string} prompt
+ * @param {{ base_url?: string }} config
  * @returns {Promise<string>}
  */
-async function call(prompt) {
+async function call(prompt, config = {}) {
+    const BASE_URL = config?.base_url || process.env.LOCAL_LLM_URL || 'http://localhost:11434';
+    const MODEL = process.env.LOCAL_LLM_MODEL || 'qwen2.5-coder:3b';
+    const TIMEOUT = parseInt(process.env.LOCAL_LLM_TIMEOUT_MS || '60000', 10);
+
     try {
         const response = await axios.post(
             `${BASE_URL}/api/generate`,

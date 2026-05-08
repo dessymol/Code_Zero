@@ -18,7 +18,41 @@ const hasColumn = async (sequelize, tableName, columnName) => {
   return Number(rows?.count || 0) > 0;
 };
 
+const hasTable = async (sequelize, tableName) => {
+  const [rows] = await sequelize.query(
+    `
+      SELECT COUNT(*) AS count
+      FROM INFORMATION_SCHEMA.TABLES
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = :tableName
+    `,
+    {
+      replacements: { tableName },
+      type: QueryTypes.SELECT
+    }
+  );
+
+  return Number(rows?.count || 0) > 0;
+};
+
 const ensureApplicationSchema = async (sequelize, logger = console) => {
+  const apiSettingsTableExists = await hasTable(sequelize, 'api_settings');
+  if (!apiSettingsTableExists) {
+    await sequelize.query(`
+      CREATE TABLE api_settings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        category VARCHAR(64) NOT NULL,
+        provider_name VARCHAR(64) NOT NULL,
+        api_key TEXT NULL,
+        base_url TEXT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    logger.info('[DB Schema] Created api_settings table.');
+  }
+
   const usersHasLlmProvider = await hasColumn(sequelize, 'users', 'llm_provider');
 
   if (!usersHasLlmProvider) {

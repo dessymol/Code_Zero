@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { getActiveJudge0Config } = require('./apiSettingsService');
 
 /**
  * Judge0Service wraps the Judge0 API for code execution.
@@ -27,6 +28,9 @@ class Judge0Service {
       headers: headers
     });
     console.log(`[Judge0Service] Using ${this.usingRapidApi ? 'RapidAPI' : 'local/self-hosted'} Judge0 at ${this.baseURL}`);
+    this.envClient = this.client;
+    this._activeClientKey = null;
+    this._activeClient = null;
     // Map of common language names to Judge0 language IDs
     this.languageMap = {
       'python': 71,      // Python 3.8.1
@@ -50,6 +54,53 @@ class Judge0Service {
       'bash': 46,        // Bash 5.0.0
       'shell': 46,       // Bash 5.0.0
     };
+  }
+
+  async refreshClientFromSettings() {
+    try {
+      const active = await getActiveJudge0Config();
+      if (!active) {
+        this.client = this.envClient;
+        return;
+      }
+
+      const cacheKey = `${active.id}:${active.updated_at || active.updatedAt || ''}:${active.base_url || ''}`;
+      if (this._activeClientKey === cacheKey && this._activeClient) {
+        this.client = this._activeClient;
+        return;
+      }
+
+      const provider = active.adapter_provider;
+      const baseURL = active.base_url;
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      if (provider === 'rapidapi') {
+        const host = (() => {
+          try {
+            return new URL(baseURL).host;
+          } catch {
+            return process.env.RAPIDAPI_HOST || 'judge0-ce.p.rapidapi.com';
+          }
+        })();
+
+        headers['X-RapidAPI-Key'] = active.api_key;
+        headers['X-RapidAPI-Host'] = host;
+      }
+
+      this._activeClient = axios.create({
+        baseURL,
+        timeout: 60000,
+        headers,
+      });
+      this._activeClientKey = cacheKey;
+      this.client = this._activeClient;
+      console.log(`[Judge0Service] Using DB ${provider} Judge0 at ${baseURL}`);
+    } catch (err) {
+      // If DB is misconfigured, fall back to env-based client to avoid breaking existing behavior.
+      this.client = this.envClient;
+    }
   }
 
   /**
@@ -76,6 +127,7 @@ class Judge0Service {
    */
   async submitCode(sourceCode, language, stdin = '', expectedOutput = '', wait = true) {
     try {
+      await this.refreshClientFromSettings();
       const languageId = this.getLanguageId(language);
 
       console.log('[Judge0Service] Submitting code:', {
@@ -229,6 +281,7 @@ class Judge0Service {
    */
   async getSubmission(token) {
     try {
+      await this.refreshClientFromSettings();
       const response = await this.client.get(`/submissions/${token}`, {
         params: {
           base64_encoded: false
@@ -247,6 +300,7 @@ class Judge0Service {
    */
   async getLanguages() {
     try {
+      await this.refreshClientFromSettings();
       const response = await this.client.get('/languages');
       return response.data;
     } catch (error) {
@@ -268,6 +322,7 @@ class Judge0Service {
    */
   async getSystemInfo() {
     try {
+      await this.refreshClientFromSettings();
       const response = await this.client.get('/about');
       return response.data;
     } catch (error) {

@@ -22,6 +22,7 @@ db.TestCase = db.Testcase;
 db.TestResult = require('./testresults')(sequelize, DataTypes);
 db.Batch = require('./batches')(sequelize, DataTypes);
 db.BatchStudent = require('./batchstudents')(sequelize, DataTypes);
+db.ApiSetting = require('./apiSettings')(sequelize, DataTypes);
 
 try {
   db.QuestionBatch = require('./questionbatches')(sequelize, DataTypes);

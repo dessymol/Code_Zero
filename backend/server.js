@@ -30,6 +30,9 @@ const { loadInitState } = require('./services/initState');
 // new chat folder
 const chatRoutes = require('./chat/routes');
 
+// centralized API settings (active provider configuration)
+const settingsRoutes = require('./routes/settingsRoutes');
+
 // password reset routes
 const passwordResetRoutes = require('./routes/passwordReset');
 
@@ -134,6 +137,7 @@ app.use('/api/questions', questionRoutes);
 app.use('/api/submissions', submissionRoutes);
 app.use('/api/results', resultsRoutes);
 app.use('/api/export', exportRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Chat, password reset, and audit log route groups
 app.use('/api/chats', chatRoutes);

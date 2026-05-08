@@ -34,6 +34,7 @@ const CodingPage = lazy(() => import('./pages/Codingpage'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const Setup = lazy(() => import('./pages/Setup'));
 const SuperAdminDashboard = lazy(() => import('./pages/SuperAdminDashboard'));
+const SuperAdminSettings = lazy(() => import('./pages/SuperAdminSettings'));
 
 const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || 'http://localhost:3000';
 
@@ -96,6 +97,8 @@ function App() {
 
         {/* Admin Routes */}
         <Route path="/super-admin/dashboard" element={<ProtectedRoute roles={['super_admin']}><SuperAdminDashboard /></ProtectedRoute>} />
+        <Route path="/super-admin/settings" element={<ProtectedRoute roles={['super_admin']}><SuperAdminSettings /></ProtectedRoute>} />
+        <Route path="/superadmin/settings" element={<ProtectedRoute roles={['super_admin']}><SuperAdminSettings /></ProtectedRoute>} />
         <Route path="/admin/dashboard" element={<ProtectedRoute roles={['admin']}><AdminDashboard /></ProtectedRoute>} />
           <Route path="/admin/course/:courseId/submissions" element={<ProtectedRoute roles={['admin']}><AdminCourseSubmissions /></ProtectedRoute>} />
           <Route path="/admin/question-banks" element={<ProtectedRoute roles={['admin']}><AdminQuestionBanks /></ProtectedRoute>} />

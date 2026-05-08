@@ -54,6 +54,7 @@ const axios = require('axios');
 const db = require('../models'); // load models/index.js once
 const judge0Service = require('../services/judge0Service');
 const { generateFeedback } = require('../services/llmServices');
+const { getActiveLLMConfig } = require('../services/apiSettingsService');
 
 // destructure models + sequelize instance from db
 const {
@@ -657,7 +658,8 @@ exports.submitCode = async (req, res) => {
     }
     // ── Async AI Feedback (fire-and-forget) ──────────────────────
     // This runs AFTER the response is sent. Student never waits for this.
-    if (process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY || process.env.LLM_PROVIDER === 'local') {
+    const activeLLM = await getActiveLLMConfig().catch(() => null);
+    if (activeLLM || process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY || process.env.LLM_PROVIDER === 'local') {
       const submissionId = submission.id;
       const languageName = LANGUAGE_ID_MAP[Number(language_id)] || `Language ${language_id}`;
       const inputToUse = stdin || question.sample_input || '';
@@ -739,7 +741,7 @@ exports.submitCode = async (req, res) => {
         }
       });
     } else {
-      console.log(`[Feedback] Skipping feedback generation - no API key or local provider configured`);
+      console.log(`[Feedback] Skipping feedback generation - no active LLM configuration found`);
     }
     // ─────────────────────────────────────────────────────────────
 

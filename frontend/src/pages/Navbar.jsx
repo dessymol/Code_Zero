@@ -1,7 +1,7 @@
 // src/pages/Navbar.jsx
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ChevronDown, LayoutDashboard, Users, BookOpen, Layers, GraduationCap, MessageSquare, UserPlus, LogOut, User, Zap, ShieldCheck } from 'lucide-react';
+import { ChevronDown, LayoutDashboard, Users, BookOpen, Layers, GraduationCap, MessageSquare, UserPlus, LogOut, User, Zap, ShieldCheck, Settings } from 'lucide-react';
 import { clearSession } from '../utils/auth';
 
 const navItems = [
@@ -31,6 +31,7 @@ const Navbar = () => {
   const fullNavItems = isSuperAdmin
     ? [
         { label: 'Super', path: '/super-admin/dashboard', icon: ShieldCheck },
+        { label: 'Settings', path: '/superadmin/settings', icon: Settings, activePaths: ['/super-admin/settings', '/superadmin/settings'] },
         { label: 'Admins', path: '/admin/add-admin', icon: UserPlus }
       ]
     : navItems;

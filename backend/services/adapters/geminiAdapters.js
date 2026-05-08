@@ -1,22 +1,22 @@
 // backend/services/adapters/geminiAdapter.js
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-const apiKey = process.env.GEMINI_API_KEY;
-const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-
-if (!apiKey) {
-    console.warn('[geminiAdapter] GEMINI_API_KEY is not set. Gemini calls will fail.');
-}
-
-const genAI = new GoogleGenerativeAI(apiKey || '');
-const model = genAI.getGenerativeModel({ model: modelName });
-
 /**
  * Send a prompt to Gemini and return the raw text response.
  * @param {string} prompt
+ * @param {{ api_key?: string }} config
  * @returns {Promise<string>}
  */
-async function call(prompt) {
+async function call(prompt, config = {}) {
+  const apiKey = config?.api_key || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY is not configured');
+  }
+
+  const modelName = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: modelName });
+
     const result = await model.generateContent({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: {

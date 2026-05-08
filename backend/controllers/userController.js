@@ -9,6 +9,7 @@ const ApiError = require('../utils/ApiError');
 const { Op } = require('sequelize'); 
 const { writeAuditLog } = require('../services/auditLogService');
 const { getProviderConfig, normalizeProvider, SUPPORTED_PROVIDERS } = require('../services/llmServices');
+const { getActiveLLMConfig } = require('../services/apiSettingsService');
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
@@ -227,12 +228,15 @@ exports.getMyLlmProvider = async (req, res, next) => {
       return next(new ApiError(403, 'Only faculty can manage LLM provider preferences'));
     }
 
+    const activeLLM = await getActiveLLMConfig().catch(() => null);
+    const selectedProvider = activeLLM?.adapter_provider || normalizeProvider(user.llm_provider);
+
     return res.status(200).json({
       success: true,
       data: {
-        selectedProvider: normalizeProvider(user.llm_provider),
+        selectedProvider,
         supportedProviders: SUPPORTED_PROVIDERS,
-        runtime: getProviderConfig()
+        runtime: await getProviderConfig()
       }
     });
   } catch (err) {
@@ -280,9 +284,9 @@ exports.updateMyLlmProvider = async (req, res, next) => {
       success: true,
       message: 'LLM provider updated',
       data: {
-        selectedProvider: requestedProvider,
+        selectedProvider: (await getActiveLLMConfig().catch(() => null))?.adapter_provider || requestedProvider,
         supportedProviders: SUPPORTED_PROVIDERS,
-        runtime: getProviderConfig()
+        runtime: await getProviderConfig()
       }
     });
   } catch (err) {
